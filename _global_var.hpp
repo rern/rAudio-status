@@ -1,11 +1,12 @@
+#pragma once
+
 bool
-    json = true,
-    no_brace    = false,
-    
+    json        = true,
     snapclient  = false,
     stream      = false,
     volumenone  = false,
     webradio    = false,
+    ws_push     = false,
     
     AIRPLAY     = false,
     BLUETOOTH   = false,
@@ -42,9 +43,11 @@ std::string
     state,
     station,
     stationcover,
+    s_status,
     uri,
     uri_ini,
-    url;
+    url,
+    ws_status;
     
 std::filesystem::path F;
 

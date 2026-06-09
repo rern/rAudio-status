@@ -1,15 +1,5 @@
 #pragma once
 
-#include <algorithm>
-#include <cctype>
-#include <cstddef>
-#include <cstring>
-#include <fstream>
-#include <iostream>
-#include <string>
-#include <string_view>
-#include <vector>
-
 // BITWISE UTILITIES ----------------------------------------
 inline uint16_t readUint16LE(const uint8_t* bytes) noexcept {
     return static_cast<uint16_t>(bytes[0] | (bytes[1] << 8));

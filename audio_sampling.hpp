@@ -1,7 +1,5 @@
 #pragma once
 
-#include "audio_format.hpp"
-
 struct AudioMeta {
     int  bitDepth   = 0;
     int  sampleRate = 0;

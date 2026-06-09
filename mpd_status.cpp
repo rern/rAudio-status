@@ -1,28 +1,40 @@
 // g++ -O2 mpd_status.cpp -o /srv/http/bash/status \
-    $( pkg-config --cflags --libs alsa,dbus-1,libcurl,libmpdclient,libupnpp,libwebsockets,taglib )
+    $( pkg-config --cflags --libs alsa,dbus-1,libcurl,libmpdclient,libupnpp,taglib )
 
+#include <algorithm>
+#include <cctype>
+#include <cstddef>
 #include <chrono>
 #include <cmath>
 #include <cstdint>
 #include <cstdlib>
+#include <cstring>
+#include <fstream>
 #include <filesystem>
+#include <iostream>
 #include <limits.h>
 #include <map>
+#include <poll.h>
+#include <string>
 #include <string.h>
+#include <string_view>
 #include <thread>
 #include <unistd.h>
 #include <unordered_map>
+#include <vector>
+
+#include "_global_var.hpp"
 
 #include <mpd/client.h>
 
-#include "_global_var.hpp"
+#include "audio_format.hpp"
 #include "audio_sampling.hpp"
 #include "alsa_volume.hpp"
 #include "bluez_meta.hpp"
 #include "embedded_meta.hpp"
 #include "ip_hostname.hpp"
 #include "upnp_coverart.hpp"
-#include "websocket_client.hpp"
+#include "websocket.hpp"
 
 std::string alphaNumericLower(const std::string& str) {
     std::string result;
@@ -165,6 +177,8 @@ void statusFormat(const std::string& k, const std::string& v) {
     std::string kv;
     if (json) {
         kv = ", \""+ k +"\": "+ v;
+        if (snapclient) { ws_status += kv; return; }
+        
     } else {
         kv = k +'='+ v;
     }
@@ -186,6 +200,8 @@ void statusFormatString(const std::string& k, std::string v) {
     std::string kv;
     if (json) {
         kv = ", \""+ k +"\": \""+ v +'"';
+        if (snapclient) { ws_status += kv; return; }
+        
     } else if (v.find(' ') != std::string::npos) {
         kv = k +"=\""+ v +'"';
     } else {
@@ -207,10 +223,10 @@ void rendererStatus(const std::string& player) {
     } else if (BLUETOOTH) {
         std::string dest = fileContent(dir_shm +"bluetoothdest");
         kv2var(bluezMeta(dest));
-    } else if (SNAPCAST) {    // #1 snapclient local refresh
-        std::string ip  = fileContent(dir_shm +"snapserverip");
-        wsSend(ip, "status"); // #2 websocket to snapserver
-        kv2var(ws_message);   // #3 server reply: status -k > ws_message(key=value)
+    } else if (SNAPCAST) {                                     // snapclient js: REFRESHDATA() > PLAYBACK.get()
+        std::string ip = fileContent(dir_shm +"snapserverip");
+        ws_status = wsSend(ip, "status");                      // wsSend to websocket server
+        if (!ws_status.empty()) kv2var(ws_status);             // server get status -k > reply key=value
     } else if (SPOTIFY) {
         sampling  = "48 kHz 320 kbit/s • Spotify";
         kv2var(fileContent(dir_shm +"spotify/stattus"));
@@ -278,15 +294,15 @@ public:
     void runCurrentSong() {
         int i = 0;
         mpd_song* song = nullptr;
-        while ((song = mpd_run_current_song(conn)) == nullptr && i < 8) { // not yet played - no current song
+        while ((song = mpd_run_current_song(conn)) == nullptr && i < 3) { // not yet played - no current song
             if (mpd_connection_get_error(conn) != MPD_ERROR_SUCCESS) return;
 //..............................................................................
             if ( i == 0 ) {                                               // trigger play-stop once
                 mpd_run_play(conn);
                 mpd_run_stop(conn);
             }
-            std::this_thread::sleep_for(std::chrono::seconds(2));
-            i++;
+            std::this_thread::sleep_for(std::chrono::seconds(1));
+            ++i;
         }
         uri     = mpd_song_get_uri(song);
         F       = "/mnt/MPD/"+ uri;
@@ -311,7 +327,7 @@ public:
     }
 };
 
-bool status() {
+int status() {
     player = fileContent(dir_shm +"player");
          if (player == "airplay")   AIRPLAY   = true;
     else if (player == "bluetooth") BLUETOOTH = true;
@@ -324,7 +340,7 @@ bool status() {
         MPDclient MPD;
         if (!MPD.ok()) {
             std::cerr << "MPD connection failed\n";
-            return false;
+            return 1;
 //..............................................................................
         }
         MPD.runStatus();
@@ -350,10 +366,7 @@ bool status() {
         }
     }
         
-    if (snapclient) {  // push on track changed / refresh from each client
-        icon = "snapclient";
-        S["snapserverip"] = ipAddress();
-    } else if (uri_ini == "cdda") {
+    if (uri_ini == "cdda") {
         ext      = "CD";
         icon     = "audiocd";
         sampling = "16 bit 44.1 kHz 1.41 Mbit/s";
@@ -454,6 +467,8 @@ bool status() {
         S["station"]      = station;
         S["stationcover"] = stationcover;
     }
+    if (snapclient) S["snapserverip"] = fileContent(dir_shm +"snapserverip");
+    
     B["btsender"]     = fileExists(dir_shm +"btmixer");
     B["librandom"]    = fileExists(dir_system +"librandom");
     B["relays"]       = fileExists(dir_system +"relays");
@@ -472,23 +487,21 @@ bool status() {
     I["volumemax"]    = std::stoi(fileContent(dir_system +"volumelimit", "-1"));
     
 ////////////////////////////////////////////////////////////////////////////////
-    if (json && !no_brace) { // page, counts, display
+    if (json && !snapclient) { // page, counts, display
         std::cout
             << "{\n"
             << "  \"page\": false\n";
-        if (!snapclient) {
-            std::string display = "{\n";
-            vector = {"ap", "camilladsp", "dabradio", "equalizer", "loginsetting", "multiraudio", "relays", "snapclient"};
-            for (const std::string& k : vector) {
-                display += "  \""+ k +"\": "+ (fileExists(dir_system + k) ? "true" : "false") +",\n";
-            }
-            display += "  \"volumenone\": "+ std::string(volumenone ? "true" : "false") +",\n"+
-                        fileContent(dir_system +"display.json").substr(2); // "{\n" remove
-            
-            std::cout
-                << ", \"counts\"    : " << fileContent(dir_data +"mpd/counts") << '\n'
-                << ", \"display\"   : " << display;
+        std::string display = "{\n";
+        vector = {"ap", "camilladsp", "dabradio", "equalizer", "loginsetting", "multiraudio", "relays", "snapclient"};
+        for (const std::string& k : vector) {
+            display += "  \""+ k +"\": "+ (fileExists(dir_system + k) ? "true" : "false") +",\n";
         }
+        display += "  \"volumenone\": "+ std::string(volumenone ? "true" : "false") +",\n"+
+                    fileContent(dir_system +"display.json").substr(2); // "{\n" remove
+        
+        std::cout
+            << ", \"counts\"    : " << fileContent(dir_data +"mpd/counts") << '\n'
+            << ", \"display\"   : " << display;
     }
     
     for (const auto& [k, v] : S) statusFormatString(k, v);
@@ -496,7 +509,7 @@ bool status() {
     for (const auto& [k, v] : B) statusFormat(k, v ? "true" : json ? "false" : "");
     
     if (state == "play") statusFormat("timestamp", std::to_string(timestamp));
-    if (json && !no_brace) std::cout << "}\n";
+    if (json && !snapclient) std::cout << "}\n";
 ////////////////////////////////////////////////////////////////////////////////
     
     if (pllength && coverart.empty() && Artist) {
@@ -513,7 +526,7 @@ bool status() {
             std::system(cmd.c_str()); // online coverart (in background)
         }
     }
-    return true;
+    return 0;
 }
 
 enum Option { COVERART, IP, HELP, LYRICS, STATUS, WEBSOCKET };
@@ -522,11 +535,11 @@ Option parseOption(const std::string& arg) {
     if (arg == "-h")                       return HELP;
     if (arg == "-i")                       return IP;
     if (arg == "-l")                       return LYRICS;
-    if (arg == "-k") {json = false;        return STATUS;}
-    if (arg == "-n") {no_brace = true;     return STATUS;}
-    if (arg == "-s") {snapclient = true;   return STATUS;} // status-push on track changed / ws on each client refresh
+    if (arg == "-k") {json        = false; return STATUS;}
+    if (arg == "-s" ||
+        arg == "-so") {snapclient = true;  return STATUS;} // status-push on track changed / ws on each client refresh
     if (arg == "-w")                       return WEBSOCKET;
-    if (arg == "-W") {ws_send_only = true; return WEBSOCKET;}
+    if (arg == "-W") {ws_push     = true;  return WEBSOCKET;}
                                            return STATUS;
 }
 
@@ -560,8 +573,9 @@ int main(int argc, char **argv) {
                 << "Usage: " << argv[0] << " [OPTION]\n"
                 << "                 json format\n"
                 << "  -n             json with no '{' braces '}'\n"
-                << "  -k             key=value format (exclude counts and display)\n" // snapserver reply - client refresh
-                << "  -s             json exclude counts and display\n\n"             // snapserver push  - changes
+                << "  -k             key=value format (no counts and display)\n" // snapserver reply - client refresh
+                << "  -s             ws broadcast json(no counts and display)\n" // snapserver push  - server change
+                << "  -so              stdout instead of broadcast\n\n"
                 
                 << "  -l <FILE>      extract embedded lyrics to stdout\n"
                 << "  -c <FILE>      extract embedded coverart to cover.jpg/png\n"
@@ -582,14 +596,28 @@ int main(int argc, char **argv) {
                 if (v0 >= '0' && v0 <= '9') {ip  = argv[2]; if (argc > 3) msg = argv[3];}
                 else                        {msg = argv[2]; if (argc > 3) ip  = argv[3];}
             }
-            wsSend(ip, msg);
-            if (ws_send_only) return 0;
-            
-            std::cout << ws_message << '\n';
-            return 0;
+            if (ws_push) {
+                return wsPush(ip, msg);
+            } else {
+                ws_status = wsSend(ip, msg);
+                if (ws_status.empty()) return 1;
+                
+                std::cout << ws_status << '\n';
+                return 0;
+            }
         }
-        case STATUS:
-            bool ok = status(); // std::cout in function
-            return ok ? 0 : 1;
+        case STATUS: {
+            int ok_status = status(); // std::cout in function
+            if (!snapclient || ok_status == 1) return ok_status;
+            
+            ws_status.erase(0, 1);
+            ws_status = "{\"channel\": \"mpdplayer\", \"data\": {"+ ws_status +"}}";
+            if (argv[1][2] == 'o') { // -so
+                std::cout << ws_status << '\n';
+                return 0;
+            }
+            
+            return wsBroadcast(ws_status); // snapserver broadcast on change
+        }
     }
 }
