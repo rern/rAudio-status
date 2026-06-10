@@ -1,28 +1,7 @@
 // g++ -O2 mpd_status.cpp -o /srv/http/bash/status \
     $( pkg-config --cflags --libs alsa,dbus-1,libcurl,libmpdclient,libupnpp,taglib )
 
-#include <algorithm>
-#include <cctype>
-#include <cstddef>
-#include <chrono>
-#include <cmath>
-#include <cstdint>
-#include <cstdlib>
-#include <cstring>
-#include <fstream>
-#include <filesystem>
-#include <iostream>
-#include <limits.h>
-#include <map>
-#include <poll.h>
-#include <string>
-#include <string_view>
-#include <thread>
-#include <unistd.h>
-#include <unordered_map>
-#include <vector>
-
-#include "_global_var.hpp"
+#include "_common.hpp"
 
 #include <mpd/client.h>
 
@@ -34,58 +13,6 @@
 #include "ip_hostname.hpp"
 #include "upnp_coverart.hpp"
 #include "websocket.hpp"
-
-std::string alphaNumericLower(const std::string& str) {
-    std::string result;
-    for (unsigned char c : str) {
-        char lower = std::tolower(c);
-        if (std::isalnum(lower)) result.push_back(lower);
-    }
-    return result;
-}
-
-bool fileExists(const std::string& file) {
-    return std::filesystem::exists(file);
-}
-
-bool fileContains(const std::string& sub, const std::string& file) {
-    std::ifstream f(file);
-    if (!f) return false;
-    
-    std::string line;
-    while (std::getline(f, line)) {
-        if (line.find(sub) != std::string::npos) {
-            f.close();
-            return true;
-//..............................................................................
-        }
-    }
-    f.close();
-    return false;
-}
-
-std::string fileContent(const std::string& file, const std::string& def = {}) {
-    std::ifstream f(file);
-    if (!f) return def;
-    
-    std::stringstream buffer;
-    buffer << f.rdbuf();
-    std::string content = buffer.str();
-    if (!content.empty() && content.back() == '\n') content.pop_back();
-    return content;
-}
-
-std::vector<std::string> fileContentLines(const std::string& file) {
-    std::vector<std::string> lines;
-    std::ifstream file_object(file);
-    if (!file_object.is_open()) return lines;
-//..............................................................................
-    std::string line;
-    while (std::getline(file_object, line)) {
-        lines.push_back(line);
-    }
-    return lines; // vetor
-}
 
 std::string fileCover(const std::string& file) {
     namespace          fs = std::filesystem;
@@ -116,18 +43,6 @@ bool hasData(const std::string& k) {
 
 bool inKey(const std::string& k, const std::vector<std::string>& vector) {
     return std::find(vector.begin(), vector.end(), k) != vector.end();
-}
-
-int64_t epochMs() {
-    return std::chrono::duration_cast<std::chrono::milliseconds>(
-                std::chrono::system_clock::now().time_since_epoch()
-            ).count();
-}
-
-int64_t epochS() {
-    return std::chrono::duration_cast<std::chrono::seconds>(
-                std::chrono::system_clock::now().time_since_epoch()
-            ).count();
 }
 
 void kv2var(const std::string& kv) {
@@ -223,25 +138,18 @@ void rendererFileToVar() {
 
 void rendererStatus(const std::string& player) {
     if (AIRPLAY) {
-        coverart  = "/data/shm/airplay/coverart.jpg";
         sampling  = "16 bit 44.1 kHz 1.41 Mbit/s • AirPlay";
-        std::string kv;
-        for (const std::string k : {"Album", "Artist", "elapsed", "start", "state", "Time", "Title"}) {
-            kv += k +'='+ fileContent(dir_shm +"airplay/" + k) +'\n';
-        }
-        kv2var(kv);
-        if (state == "play") elapsed = epochS() - start + 1;
+        rendererFileToVar();
+        coverart  = dir_renderer +"coverart.jpg";
     } else if (BLUETOOTH) {
-        std::string dest = fileContent(dir_shm +"bluetoothdest");
-        kv2var(bluezMeta(dest));
+        bluezMeta();
     } else if (SNAPCAST) {                                     // snapclient js: REFRESHDATA() > PLAYBACK.get()
         std::string ip = fileContent(dir_shm +"snapserverip");
         ws_status = wsSend(ip, "status");                      // wsSend to websocket server
         if (!ws_status.empty()) kv2var(ws_status);             // server get status -k > reply key=value
     } else if (SPOTIFY) {
         sampling  = "48 kHz 320 kbit/s • Spotify";
-        kv2var(fileContent(dir_shm +"spotify/stattus"));
-        if (state == "play") elapsed = epochS() - start + 1;
+        rendererFileToVar();
     }
     timestamp = epochMs();
 }
