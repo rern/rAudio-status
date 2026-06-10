@@ -16,7 +16,6 @@
 #include <map>
 #include <poll.h>
 #include <string>
-#include <string.h>
 #include <string_view>
 #include <thread>
 #include <unistd.h>
@@ -208,6 +207,18 @@ void statusFormatString(const std::string& k, std::string v) {
         kv = k +'='+ v;
     }
     std::cout << kv << '\n';
+}
+
+void rendererFileToVar() {
+    for (const std::string k : {"Album", "Artist", "Title"}) {
+        S[k] = fileContent(dir_renderer + k);
+    }
+    coverart = fileContent(dir_renderer +"coverart");
+    state    = fileContent(dir_renderer +"state");
+    elapsed  = std::stoi(fileContent(dir_renderer +"elapsed"));
+    start    = std::stoi(fileContent(dir_renderer +"start"));
+    Time     = std::stoi(fileContent(dir_renderer +"Time"));
+    if (state == "play") elapsed = epochS() - start + 1;
 }
 
 void rendererStatus(const std::string& player) {
