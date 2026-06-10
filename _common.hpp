@@ -53,7 +53,6 @@ std::string
     dir_data   = "/srv/http/data/",
     dir_radio,
     dir_shm      = dir_data +"shm/",
-    dir_renderer = dir_shm +"renderer/",
     dir_system   = dir_data +"system/",
     ext,
     file_cover,

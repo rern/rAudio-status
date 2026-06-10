@@ -124,34 +124,32 @@ void statusFormatString(const std::string& k, std::string v) {
     std::cout << kv << '\n';
 }
 
-void rendererFileToVar() {
-    for (const std::string k : {"Album", "Artist", "Title"}) {
-        S[k] = fileContent(dir_renderer + k);
-    }
-    coverart = fileContent(dir_renderer +"coverart");
-    state    = fileContent(dir_renderer +"state");
-    elapsed  = std::stoi(fileContent(dir_renderer +"elapsed"));
-    start    = std::stoi(fileContent(dir_renderer +"start"));
-    Time     = std::stoi(fileContent(dir_renderer +"Time"));
-    if (state == "play") elapsed = epochS() - start + 1;
-}
-
 void rendererStatus(const std::string& player) {
-    if (AIRPLAY) {
-        sampling  = "16 bit 44.1 kHz 1.41 Mbit/s • AirPlay";
-        rendererFileToVar();
-        coverart  = dir_renderer +"coverart.jpg";
-    } else if (BLUETOOTH) {
-        bluezMeta();
-    } else if (SNAPCAST) {                                     // snapclient js: REFRESHDATA() > PLAYBACK.get()
-        std::string ip = fileContent(dir_shm +"snapserverip");
-        ws_status = wsSend(ip, "status");                      // wsSend to websocket server
-        if (!ws_status.empty()) kv2var(ws_status);             // server get status -k > reply key=value
-    } else if (SPOTIFY) {
-        sampling  = "48 kHz 320 kbit/s • Spotify";
-        rendererFileToVar();
-    }
     timestamp = epochMs();
+    if (BLUETOOTH) {
+        bluezMeta();
+        return;
+    }
+    
+    std::string kv;
+    if (SNAPCAST) {                // snapclient js: REFRESHDATA() > PLAYBACK.get()
+        std::string ip = fileContent(dir_shm +"snapserverip");
+        kv = wsSend(ip, "status"); // websocket server status -k > reply key=value
+    } else {
+        if (AIRPLAY) {
+            sampling  = "16 bit 44.1 kHz 1.41 Mbit/s • AirPlay";
+            std::string v;
+            for (const std::string k : {"Album", "Artist", "coverart", "elapsed", "start", "state", "Time", "Title"}) {
+                v = fileContent(dir_shm +"airplay/"+ k);
+                if (!v.empty()) kv += k +'='+ v +'\n';
+            }
+        } else if (SPOTIFY) {
+            sampling  = "48 kHz 320 kbit/s • Spotify";
+            kv = fileContent(dir_shm +"spotify/status");
+        }
+        if (state == "play" && elapsed) elapsed = epochS() - start + 1;
+    }
+    if (!kv.empty()) kv2var(kv);
 }
 
 class MPDclient {
