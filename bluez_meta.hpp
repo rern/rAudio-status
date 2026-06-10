@@ -102,14 +102,13 @@ void parse_track_metadata(DBusMessageIter* dict_iter) {
         dbus_message_iter_recurse(&sub_iter, &variant_iter);
         int type = dbus_message_iter_get_arg_type(&variant_iter);
 
-        std::string k(key);
+        std::string_view k(key);
         
-        static const std::unordered_set<std::string> keys = {"Title", "Album", "Artist"};
         if (type == DBUS_TYPE_STRING) {
-            if (keys.count(k)) {
+            if (k == "Title" || k == "Artist" || k == "Album") {
                 const char* val; 
                 dbus_message_iter_get_basic(&variant_iter, &val);
-                S[k] = val;
+                S[std::string(k)] = val;
             }
             else if (k == "ImgHandle") {
                 const char* val; dbus_message_iter_get_basic(&variant_iter, &val);
@@ -140,14 +139,14 @@ void parse_get_all_properties(DBusMessageIter* array_iter) {
         dbus_message_iter_recurse(&sub_iter, &variant_iter);
         int type = dbus_message_iter_get_arg_type(&variant_iter);
 
-        std::string k(key);
-
+        std::string_view k(key);
+        
         if (k == "Status" && type == DBUS_TYPE_STRING) {
             const char* val; dbus_message_iter_get_basic(&variant_iter, &val);
-            std::string Status(val);
-                 if (Status == "paused")  state = "pause";
-            else if (Status == "playing") state = "play";
-            else                          state = "stop";
+            std::string_view v(val);
+                 if (v == "paused")  state = "pause";
+            else if (v == "playing") state = "play";
+            else                     state = "stop";
         } else if (k == "Position" && type == DBUS_TYPE_UINT32) {
             uint32_t val; dbus_message_iter_get_basic(&variant_iter, &val);
             elapsed = val / 1000;
