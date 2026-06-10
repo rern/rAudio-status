@@ -15,24 +15,23 @@
 #include "websocket.hpp"
 
 std::string fileCover(const std::string& file) {
-    namespace          fs = std::filesystem;
-    std::filesystem::path pathObj(file);
+    namespace fs = std::filesystem;
+    fs::path pathObj(file);
     std::string directory = pathObj.parent_path().string();
+    if (!fs::exists(directory)) return {};
 
-    std::vector<std::string>   keywords = {"album.", "cover.", "folder.", "front."};
-    std::vector<std::string> extensions = {".gif", ".jpg", ".png"};
-
+    // Use static unordered_set so they are allocated only ONCE in memory
+    static const std::unordered_set<std::string> names = {"album", "cover", "folder", "front"};
+    static const std::unordered_set<std::string> exts  = {".gif", ".jpg", ".png"};
+    std::string w;
     for (const auto& entry : fs::directory_iterator(directory)) {
         if (!entry.is_regular_file()) continue;
-//..............................................................................
-        std::string filename = entry.path().filename().string(); // name.ext
-        std::string      ext = entry.path().extension().string();
-        auto        extMatch = std::find(extensions.begin(), extensions.end(), ext);
-        if (extMatch == extensions.end()) continue;
-//..............................................................................
-        for (const std::string& kw : keywords) {
-            if (filename.find(kw) == 0) return entry.path().string();
-        }
+
+        w = entry.path().extension().string(); // name[.ext]
+        if (!exts.count(w)) continue; // O(1)
+
+        w = entry.path().stem().string(); // [name].ext
+        if (names.count(w)) return entry.path().string();
     }
     return {};
 }
@@ -128,7 +127,6 @@ void rendererStatus(const std::string& player) {
     timestamp = epochMs();
     if (BLUETOOTH) {
         bluezMeta();
-        sampling = "Bluetooth";
         return;
     }
     
@@ -420,7 +418,7 @@ int status() {
         
         std::cout
             << ", \"counts\"    : " << fileContent(dir_data +"mpd/counts") << '\n'
-            << ", \"display\"   : " << display;
+            << ", \"display\"   : " << display << '\n';
     }
     
     for (const auto& [k, v] : S) statusFormatString(k, v);
