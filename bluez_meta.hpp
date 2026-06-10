@@ -27,13 +27,14 @@ void bluezTrack(DBusMessageIter* dict_iter) {
 
         std::string k(key);
         if (type == DBUS_TYPE_STRING) {
-            const char* val; dbus_message_iter_get_basic(&variant_iter, &val);
             if ((k == "Album" || k == "Artist" || k == "Title")) {
+                const char* val; dbus_message_iter_get_basic(&variant_iter, &val);
                 S[k] = val;
             } else if (k == "ImgHandle") { // not work yet
+                const char* val; dbus_message_iter_get_basic(&variant_iter, &val);
                 coverart = val;
             }
-        } else if (type == DBUS_TYPE_UINT32) {
+        } else if (k == "Duration" && type == DBUS_TYPE_UINT32) {
             uint32_t val; dbus_message_iter_get_basic(&variant_iter, &val);
             Time = val / 1000; // ms to s
         }
@@ -63,10 +64,10 @@ void bluezAll(DBusMessageIter* array_iter) {
 
         if (k == "Status" && type == DBUS_TYPE_STRING) {
             const char* val; dbus_message_iter_get_basic(&variant_iter, &val);
-            std::string state(val);
-                 if (state == "paused")  state = "pause";
-            else if (state == "playing") state = "play";
-            else                         state = "stop";
+            std::string Status(val);
+                 if (Status == "paused")  state = "pause";
+            else if (Status == "playing") state = "play";
+            else                          state = "stop";
         } else if (k == "Position" && type == DBUS_TYPE_UINT32) {
             uint32_t val; dbus_message_iter_get_basic(&variant_iter, &val);
             elapsed = val / 1000; // ms to s
@@ -75,6 +76,7 @@ void bluezAll(DBusMessageIter* array_iter) {
         }
         dbus_message_iter_next(&entry_iter);
     }
+    if (elapsed == 0) state = "stop";
 }
 
 void bluezMeta() {
