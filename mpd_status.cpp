@@ -128,6 +128,7 @@ void rendererStatus(const std::string& player) {
     timestamp = epochMs();
     if (BLUETOOTH) {
         bluezMeta();
+        sampling = "Bluetooth";
         return;
     }
     
@@ -137,15 +138,15 @@ void rendererStatus(const std::string& player) {
         kv = wsSend(ip, "status"); // websocket server status -k > reply key=value
     } else {
         if (AIRPLAY) {
-            sampling  = "16 bit 44.1 kHz 1.41 Mbit/s • AirPlay";
             std::string v;
             for (const std::string k : {"Album", "Artist", "coverart", "elapsed", "start", "state", "Time", "Title"}) {
                 v = fileContent(dir_shm +"airplay/"+ k);
                 if (!v.empty()) kv += k +'='+ v +'\n';
             }
+            sampling  = "16 bit 44.1 kHz 1.41 Mbit/s • AirPlay";
         } else if (SPOTIFY) {
-            sampling  = "48 kHz 320 kbit/s • Spotify";
             kv = fileContent(dir_shm +"spotify/status");
+            sampling  = "48 kHz 320 kbit/s • Spotify";
         }
         if (state == "play" && elapsed) elapsed = epochS() - start + 1;
     }
@@ -371,6 +372,7 @@ int status() {
             if (coverart.empty() && UPNP) coverartUpnp(coverart, file_coverart);
         }
     }
+    if (icon.empty() && player != "mpd") icon = player;
 
     S["control"]      = control;
     S["coverart"]     = coverart;
