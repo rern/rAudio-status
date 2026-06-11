@@ -21,7 +21,7 @@ std::string fileCover(const std::string& file) {
     if (!fs::exists(directory)) return {};
 
     // Use static unordered_set so they are allocated only ONCE in memory
-    static const std::unordered_set<std::string> names = {"album", "cover", "folder", "front"};
+    static const std::unordered_set<std::string> names = {"cover", "album", "folder", "front"};
     static const std::unordered_set<std::string> exts  = {".jpg", ".png", ".gif"};
     std::string w;
     for (const auto& entry : fs::directory_iterator(directory)) {
@@ -295,19 +295,17 @@ int status() {
             ext      = "UPnP";
         } else {
             webradio = true;
-            size_t p = uri.find("#charset");
-            url      = p == std::string::npos ? uri : uri.substr(0, p);
+            if (uri.ends_with("#charset")) uri.resize(uri.length() - 8);
+            url      = uri;
             if (uri_ini == "rtsp") {
                 ext       = "DAB";
                 icon      = "dabradio";
                 dir_radio = "dabradio/";
+                if (state == "stop") sampling = "48 kHz";
             } else {
+                ext       = "Radio";
                 dir_radio = "webradio/";
                 std::replace(url.begin(), url.end(), '/', '|');
-                vector    = fileContentLines(dir_data + dir_radio + url);
-                station   = vector[0];
-                if (vector.size() > 1) sampling = vector[1];
-                if (state == "stop" && uri_ini == "rtsp") sampling = "48 kHz";
                 if (url.find("icecast.radiofrance.fr") != std::string::npos) {
                     icon = "radiofrance";
                 } else if (url.find("stream.radioparadise.com") != std::string::npos) {
@@ -315,24 +313,34 @@ int status() {
                 } else {
                     icon = "webradio";
                 }
-                for (const std::string& x : {".jpg", ".png", ".gif"}) {
-                    std::string f = dir_data + dir_radio +"img/"+ url + x;
-                    if (fileExists(f)) {
-                        coverart = f.substr(9);
-                        break;
+                if (state == "play" && icon != "webradio") { // radiofrance / radioparadise
+                    if (!station.empty()) ext = station.substr(station.find(" - ") + 3);
+                    std::string file_radio = dir_shm +"radio";
+                    if (fileExists(file_radio)) {
+                        std::string status = fileContent(dir_shm +"status");
+                        kv2var(status);
+                    } else {
+                        std::string cmd = "systemctl start "+ std::string(ext == "DAB" ? "dab" : "radio") +" &> /dev/null &";
+                        std::system(cmd.c_str());
                     }
                 }
             }
-            if (state == "play" && icon != "webradio") { // radiofrance / radioparadise
-                kv2var(fileContent(dir_shm +"status"));
-                ext = station.substr(station.find(" - ") + 3);
-                std::ofstream f(dir_shm +"radio");
-                if (f) {
-                    f << "file=" << uri;
-                    f.close();
+            for (const std::string& x : {".jpg", ".png", ".gif"}) {
+                std::string f = dir_data + dir_radio +"img/"+ url + x;
+                if (fileExists(f)) {
+                    stationcover = f.substr(9);
+                    break;
                 }
-            } else {
-                ext = "Radio";
+            }
+            for (const auto& entry : std::filesystem::recursive_directory_iterator(dir_data + dir_radio)) {
+                if (entry.is_regular_file() && entry.path().filename() == url) {
+                    vector = fileContentLines(entry.path().string());
+                    if (vector.size()) {
+                        station = vector[0];
+                        if (vector.size() > 1) sampling = vector[1];
+                    }
+                    break;
+                }
             }
         }
     } else if (pllength || snapclient) {
@@ -361,17 +369,15 @@ int status() {
         if (samplerate) sampling += std::format("{:.1f}", samplerate / 1000.0) +" kHz";
         if (bitrate)    sampling += " "+ std::to_string(bitrate) +" kHz";
     }
-    if (pllength > 1) {
-        std::string pos_pll = std::to_string(pos + 1) +"/"+ std::to_string(pllength);
-        sampling = pos_pll + (sampling.empty() ? "" : " • "+ sampling);
-    }
     sampling += sampling.empty() ? ext : " • "+ ext;
+    if (pllength > 1) position = std::to_string(pos + 1) +"/"+ std::to_string(pllength) +" • ";
     
-    bool Album  = hasData("Album");
-    bool Artist = hasData("Artist");
+    bool album  = hasData("Album");
+    bool artist = hasData("Artist");
+    bool title  = hasData("Title");
     if (coverart.empty()) {
         std::string path_no_ext;
-        if (Album && Artist) { // get already fetched
+        if (album && artist) { // get already fetched
             std::string path_no_ext = dir_shm +"online/";
             path_no_ext += alphaNumericLower(S["Artist"] + S["Album"]);
             for (const std::string& x : {".jpg", ".png"}) {
@@ -391,6 +397,7 @@ int status() {
     S["icon"]         = icon;
     S["file"]         = uri;
     S["player"]       = player;
+    S["position"]     = position;
     S["sampling"]     = sampling;
     S["state"]        = state;
     if (webradio) {
@@ -441,25 +448,22 @@ int status() {
     if (state == "play") statusFormat("timestamp", std::to_string(timestamp));
     if (json && !snapclient) std::cout << "}\n";
 ////////////////////////////////////////////////////////////////////////////////
+    std::string file_play = dir_shm +"play";
     if ( state == "play") {
-        std::ofstream(dir_shm +"play", std::ios::app).close();
+        std::ofstream(file_play);
     } else {
-        std::filesystem::remove(dir_shm +"play");
+        std::filesystem::remove(file_play);
     }
     
-    if (coverart.empty() && Artist) {
-        std::string args;
-        if (Album) {
-            args = S["Artist"] +"\n"+ S["Album"] +"\nalbum\n";
-        } else if (hasData("Title")) {
-            args = S["Artist"] +"\n"+ S["Title"] +"\ntitle\n";
+    if (coverart.empty() && artist && (album || title)) { // online coverart (in background)
+        std::string args = S["Artist"] +'\n';
+        if (album) {
+            args += S["Album"] +"\nCMD ARTIST ALBUM";
+        } else {
+            args += S["Title"] +"\nCMD ARTIST TITLE";
         }
-        if (!args.empty()) {
-            std::string cmd = "/srv/http/bash/status-coverartonline.sh \"cmd\n"+
-                              args +
-                              "\nCMD ARTIST ALBUM MODE\" &> /dev/null &";
-            std::system(cmd.c_str()); // online coverart (in background)
-        }
+        std::string cmd = "/srv/http/bash/status-coverartonline.sh \"cmd\n"+ args +"\" &> /dev/null &";
+        std::system(cmd.c_str());
     }
     return 0;
 }
