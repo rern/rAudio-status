@@ -111,12 +111,14 @@ void parse_track_metadata(DBusMessageIter* dict_iter) {
                 S[std::string(k)] = val;
             }
             else if (k == "ImgHandle") {
-                const char* val; dbus_message_iter_get_basic(&variant_iter, &val);
+                const char* val;
+                dbus_message_iter_get_basic(&variant_iter, &val);
                 coverart = val;
             }
         }
         else if (k == "Duration" && type == DBUS_TYPE_UINT32) {
-            uint32_t val; dbus_message_iter_get_basic(&variant_iter, &val);
+            uint32_t val;
+            dbus_message_iter_get_basic(&variant_iter, &val);
             Time = val / 1000;
         }
         dbus_message_iter_next(&entry_iter);
@@ -142,13 +144,15 @@ void parse_get_all_properties(DBusMessageIter* array_iter) {
         std::string_view k(key);
         
         if (k == "Status" && type == DBUS_TYPE_STRING) {
-            const char* val; dbus_message_iter_get_basic(&variant_iter, &val);
+            const char* val;
+            dbus_message_iter_get_basic(&variant_iter, &val);
             std::string_view v(val);
                  if (v == "paused")  state = "pause";
             else if (v == "playing") state = "play";
             else                     state = "stop";
         } else if (k == "Position" && type == DBUS_TYPE_UINT32) {
-            uint32_t val; dbus_message_iter_get_basic(&variant_iter, &val);
+            uint32_t val;
+            dbus_message_iter_get_basic(&variant_iter, &val);
             elapsed = val / 1000;
         } else if (k == "Track" && type == DBUS_TYPE_ARRAY) {
             parse_track_metadata(&variant_iter);

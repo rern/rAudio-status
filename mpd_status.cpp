@@ -357,17 +357,17 @@ int status() {
     bool Album  = hasData("Album");
     bool Artist = hasData("Artist");
     if (coverart.empty()) {
-        std::string file_coverart;
+        std::string path_no_ext;
         if (Album && Artist) { // get already fetched
-            std::string file_coverart = dir_shm +"online/";
-            file_coverart += alphaNumericLower(S["Artist"] + S["Album"]);
+            std::string path_no_ext = dir_shm +"online/";
+            path_no_ext += alphaNumericLower(S["Artist"] + S["Album"]);
             for (const std::string ext : {".jpg", ".png"}) {
-                if (fileExists(file_coverart + ext)) {
-                    coverart = file_coverart.substr(9) + ext;
+                if (fileExists(path_no_ext + ext)) {
+                    coverart = path_no_ext.substr(9) + ext;
                     break;
                 }
             }
-            if (coverart.empty() && UPNP) coverartUpnp(coverart, file_coverart);
+            if (coverart.empty() && UPNP) coverartUpnp(path_no_ext);
         }
     }
     if (icon.empty() && player != "mpd") icon = player;

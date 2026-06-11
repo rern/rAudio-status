@@ -13,7 +13,7 @@ size_t curlWrite(void *ptr, size_t size, size_t nmemb, FILE *stream) {
     return written;
 }
 
-void coverartSave(std::string& coverart, const std::string& uri, std::string& file_coverart) {
+void coverartSave(const std::string& albumart_uri, std::string& path_no_ext) {
     CURL *curl;
     FILE *fp;
     CURLcode res;
@@ -25,18 +25,18 @@ void coverartSave(std::string& coverart, const std::string& uri, std::string& fi
         return;
     }
 
-    std::filesystem::path p(uri);
-    file_coverart += p.extension().string();
+    std::filesystem::path p(albumart_uri);
+    std::string path_ext = path_no_ext + p.extension().string();
     // Open target file in binary write mode ("wb")
-    fp = fopen(file_coverart.c_str(), "wb");
+    fp = fopen(path_ext.c_str(), "wb");
     if (!fp) {
-        std::cerr << "Failed to open or create file: " << file_coverart << "\n";
+        std::cerr << "Failed to open or create file: " << path_no_ext << "\n";
         curl_easy_cleanup(curl);
         return;
     }
 
     // Set curl options
-    curl_easy_setopt(curl, CURLOPT_URL, uri.c_str());
+    curl_easy_setopt(curl, CURLOPT_URL, albumart_uri.c_str());
     
     // Pass our write function to handle the downloaded chunks
     curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, curlWrite);
@@ -58,10 +58,10 @@ void coverartSave(std::string& coverart, const std::string& uri, std::string& fi
     curl_easy_cleanup(curl);
 
     // Check if the download was successful
-    if (res == CURLE_OK) coverart = file_coverart.substr(9);
+    if (res == CURLE_OK) coverart = path_ext.substr(9);
 }
 
-void coverartUpnp(std::string& coverart, std::string& file_coverart) {
+void coverartUpnp(std::string& path_no_ext) {
     Logger::getTheLog("")->setLogLevel(static_cast<Logger::LogLevel>(1)); // suppress error :2:../libupnpp-1.0.4/...
     
     char hostname[256];
@@ -83,8 +83,6 @@ void coverartUpnp(std::string& coverart, std::string& file_coverart) {
     if (!dirc.m_items.empty()) {
         auto &mprops = dirc.m_items[0].m_props;
         auto albumArtURI = mprops.find("upnp:albumArtURI");
-        if (albumArtURI != mprops.end()) {
-            coverartSave(coverart, albumArtURI->second, file_coverart);
-        }
+        if (albumArtURI != mprops.end()) coverartSave(albumArtURI->second, path_no_ext);
     }
 }
