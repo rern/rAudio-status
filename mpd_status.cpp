@@ -22,7 +22,7 @@ std::string fileCover(const std::string& file) {
 
     // Use static unordered_set so they are allocated only ONCE in memory
     static const std::unordered_set<std::string> names = {"album", "cover", "folder", "front"};
-    static const std::unordered_set<std::string> exts  = {".gif", ".jpg", ".png"};
+    static const std::unordered_set<std::string> exts  = {".jpg", ".png", ".gif"};
     std::string w;
     for (const auto& entry : fs::directory_iterator(directory)) {
         if (!entry.is_regular_file()) continue;
@@ -137,7 +137,7 @@ void rendererStatus(const std::string& player) {
     } else {
         if (AIRPLAY) {
             std::string v;
-            for (const std::string k : {"Album", "Artist", "coverart", "elapsed", "start", "state", "Time", "Title"}) {
+            for (const std::string& k : {"Album", "Artist", "coverart", "elapsed", "start", "state", "Time", "Title"}) {
                 v = fileContent(dir_shm +"airplay/"+ k);
                 if (!v.empty()) kv += k +'='+ v +'\n';
             }
@@ -304,7 +304,9 @@ int status() {
             } else {
                 dir_radio = "webradio/";
                 std::replace(url.begin(), url.end(), '/', '|');
-                kv2var(fileContent(dir_data + dir_radio + url));
+                vector    = fileContentLines(dir_data + dir_radio + url);
+                station   = vector[0];
+                if (vector.size() > 1) sampling = vector[1];
                 if (state == "stop" && uri_ini == "rtsp") sampling = "48 kHz";
                 if (url.find("icecast.radiofrance.fr") != std::string::npos) {
                     icon = "radiofrance";
@@ -313,12 +315,24 @@ int status() {
                 } else {
                     icon = "webradio";
                 }
+                for (const std::string& x : {".jpg", ".png", ".gif"}) {
+                    std::string f = dir_data + dir_radio +"img/"+ url + x;
+                    if (fileExists(f)) {
+                        coverart = f.substr(9);
+                        break;
+                    }
+                }
             }
             if (state == "play" && icon != "webradio") { // radiofrance / radioparadise
-                ext      = station.substr(station.find(" - ") + 3);
                 kv2var(fileContent(dir_shm +"status"));
+                ext = station.substr(station.find(" - ") + 3);
+                std::ofstream f(dir_shm +"radio");
+                if (f) {
+                    f << "file=" << uri;
+                    f.close();
+                }
             } else {
-                ext      = "Radio";
+                ext = "Radio";
             }
         }
     } else if (pllength || snapclient) {
@@ -342,17 +356,16 @@ int status() {
             }
         }
     }
-    if (pllength || snapclient) {
+    if (sampling.empty()) {
         if (bitdepth)   sampling += std::to_string(bitdepth) +"bit ";
         if (samplerate) sampling += std::format("{:.1f}", samplerate / 1000.0) +" kHz";
         if (bitrate)    sampling += " "+ std::to_string(bitrate) +" kHz";
-        bool empty = sampling.empty();
-        if (pllength > 1) {
-            std::string pos_pll = std::to_string(pos + 1) +"/"+ std::to_string(pllength);
-            sampling = pos_pll + (empty ? "" : " • "+ sampling);
-        }
-        sampling += empty ? ext : " • "+ ext;
     }
+    if (pllength > 1) {
+        std::string pos_pll = std::to_string(pos + 1) +"/"+ std::to_string(pllength);
+        sampling = pos_pll + (sampling.empty() ? "" : " • "+ sampling);
+    }
+    sampling += sampling.empty() ? ext : " • "+ ext;
     
     bool Album  = hasData("Album");
     bool Artist = hasData("Artist");
@@ -361,9 +374,9 @@ int status() {
         if (Album && Artist) { // get already fetched
             std::string path_no_ext = dir_shm +"online/";
             path_no_ext += alphaNumericLower(S["Artist"] + S["Album"]);
-            for (const std::string ext : {".jpg", ".png"}) {
-                if (fileExists(path_no_ext + ext)) {
-                    coverart = path_no_ext.substr(9) + ext;
+            for (const std::string& x : {".jpg", ".png"}) {
+                if (fileExists(path_no_ext + x)) {
+                    coverart = path_no_ext.substr(9) + x;
                     break;
                 }
             }
@@ -428,6 +441,11 @@ int status() {
     if (state == "play") statusFormat("timestamp", std::to_string(timestamp));
     if (json && !snapclient) std::cout << "}\n";
 ////////////////////////////////////////////////////////////////////////////////
+    if ( state == "play") {
+        std::ofstream(dir_shm +"play", std::ios::app).close();
+    } else {
+        std::filesystem::remove(dir_shm +"play");
+    }
     
     if (coverart.empty() && Artist) {
         std::string args;
