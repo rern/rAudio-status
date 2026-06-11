@@ -397,8 +397,8 @@ int status() {
     B["stream"]       = stream;
     B["webradio"]     = webradio;
     
-    I["elapsed"]      = elapsed ? elapsed : -1; // -1 = false
-    I["Time"]         = Time    ? Time    : -1; // mpd / cd
+    I["elapsed"]      = elapsed;
+    I["Time"]         = Time;
     I["volume"]       = volume;
     I["volumemute"]   = std::stoi(fileContent(dir_system +"volumemute",  "0"));
     I["volumemax"]    = std::stoi(fileContent(dir_system +"volumelimit", "-1"));
