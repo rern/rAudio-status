@@ -5,6 +5,7 @@
 #include <libupnpp/control/service.hxx>
 #include <libupnpp/control/cdircontent.hxx>
 #include <libupnpp/control/typedservice.hxx>
+#include <libupnpp/log.hxx>
 
 // Callback function to handle incoming data streaming from the server
 size_t curlWrite(void *ptr, size_t size, size_t nmemb, FILE *stream) {
@@ -25,7 +26,7 @@ void coverartSave(std::string& coverart, const std::string& uri, std::string& fi
     }
 
     std::filesystem::path p(uri);
-    file_coverart += "."+ p.extension().string();
+    file_coverart += p.extension().string();
     // Open target file in binary write mode ("wb")
     fp = fopen(file_coverart.c_str(), "wb");
     if (!fp) {
@@ -61,6 +62,8 @@ void coverartSave(std::string& coverart, const std::string& uri, std::string& fi
 }
 
 void coverartUpnp(std::string& coverart, std::string& file_coverart) {
+    Logger::getTheLog("")->setLogLevel(static_cast<Logger::LogLevel>(1)); // suppress error :2:../libupnpp-1.0.4/...
+    
     char hostname[256];
     gethostname(hostname, sizeof(hostname));
     std::string device = std::string(hostname) + "-UPnP/AV";

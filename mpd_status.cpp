@@ -356,7 +356,7 @@ int status() {
     
     bool Album  = hasData("Album");
     bool Artist = hasData("Artist");
-    if (coverart.empty() && stream) {
+    if (coverart.empty()) {
         std::string file_coverart;
         if (Album && Artist) { // get already fetched
             std::string file_coverart = dir_shm +"online/";
@@ -429,7 +429,7 @@ int status() {
     if (json && !snapclient) std::cout << "}\n";
 ////////////////////////////////////////////////////////////////////////////////
     
-    if (pllength && coverart.empty() && Artist) {
+    if (coverart.empty() && Artist) {
         std::string args;
         if (Album) {
             args = S["Artist"] +"\n"+ S["Album"] +"\nalbum\n";

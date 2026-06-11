@@ -7,8 +7,11 @@
 #include <libupnpp/control/service.hxx>
 #include <libupnpp/control/cdircontent.hxx>
 #include <libupnpp/control/typedservice.hxx>
+#include <libupnpp/log.hxx>
 
 int getCoverartUpnp() {
+    Logger::getTheLog("")->setLogLevel(static_cast<Logger::LogLevel>(1)); // suppress error :2:../libupnpp-1.0.4/...
+    
     char hostname[256];
     gethostname(hostname, sizeof(hostname));
     std::string device = std::string(hostname) + "-UPnP/AV";
