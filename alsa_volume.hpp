@@ -19,7 +19,7 @@ int mapPercent(long& current_db, long& min_db, long& max_db) {
 }
 
 // Optimized: Direct lookup using the known mixer control name
-int getVolume(const std::string& device, const std::string& mixer) {
+int getVolume(const std::string& device, const std::string& CONTROL) {
     int percent = 0;
     snd_mixer_t *handle = nullptr;
     snd_mixer_elem_t *elem = nullptr;
@@ -34,7 +34,7 @@ int getVolume(const std::string& device, const std::string& mixer) {
     // 2. Set up the identification token using the known name
     snd_mixer_selem_id_alloca(&sid);
     snd_mixer_selem_id_set_index(sid, 0); // Default index 0
-    snd_mixer_selem_id_set_name(sid, mixer.c_str());
+    snd_mixer_selem_id_set_name(sid, CONTROL.c_str());
 
     // 3. Direct Lookup instead of a sequential loop
     elem = snd_mixer_find_selem(handle, sid);

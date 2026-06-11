@@ -23,12 +23,11 @@
 #include <vector>
 
 bool
-    json        = true,
-    snapclient  = false,
-    stream      = false,
-    volumenone  = false,
-    webradio    = false,
-    ws_push     = false,
+    JSON        = true,
+    SNAPCLIENT  = false,
+    STREAM      = false,
+    VOLUMENONE  = false,
+    WEBRADIO    = false,
     
     AIRPLAY     = false,
     BLUETOOTH   = false,
@@ -37,39 +36,33 @@ bool
     SPOTIFY     = false,
     UPNP        = false;
 int
-    bitdepth   = 0,
-    bitrate    = 0,
-    elapsed    = 0,
-    pllength   = 0,
-    pos        = 0,
-    samplerate = 0,
-    Time       = 0,
-    volume     = 0;
+    BITDEPTH   = 0,
+    BITRATE    = 0,
+    ELAPSED    = 0,
+    PLLENGTH   = 0,
+    POS        = 0,
+    SAMPLERATE = 0,
+    TIME       = 0,
+    VOLUME     = 0;
 int64_t
-    start      = 0,
-    timestamp  = 0;
+    START      = 0,
+    TIMESTAMP  = 0;
 std::string
-    coverart,
-    control,
-    dir_data   = "/srv/http/data/",
-    dir_radio,
-    dir_shm      = dir_data +"shm/",
-    dir_system   = dir_data +"system/",
-    ext,
-    file_cover,
-    file_radio,
-    icon,
-    mixer,
-    player,
-    position,
-    sampling,
-    state,
-    station,
-    stationcover,
-    uri,
-    uri_ini,
-    url,
-    ws_status;
+    COVERART,
+    CONTROL,
+    DIR_DATA   = "/srv/http/data/",
+    DIR_SHM      = DIR_DATA +"shm/",
+    DIR_SYSTEM   = DIR_DATA +"system/",
+    EXT,
+    ICON,
+    PLAYER,
+    SAMPLING,
+    STATE,
+    STATION,
+    STATIONCOVER,
+    URI,
+    URI_INI,
+    WS_STATUS;
     
 std::filesystem::path F;
 
@@ -79,11 +72,7 @@ std::unordered_map<std::string, std::string> S;
 
 std::unordered_map<std::string, int> I;
 
-std::vector<std::string>
-    key_BI = {"elapsed", "pllength", "song",     "Time",      "volume",   "webradio"},
-    key_S  = {"Album",   "Artist",   "Composer", "Conductor", "coverart", "file",
-              "icon",    "player",   "sampling", "station",   "state",    "Title"},
-    vector;
+std::vector<std::string> VECTOR;
 
 std::string alphaNumericLower(const std::string& str) {
     std::string result;

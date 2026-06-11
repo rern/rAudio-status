@@ -576,8 +576,8 @@ AudioEmbedded embeddedWMA(AudioData& AD) {
 // ============================================================================
 // EXPORT PROCESSING MANAGER
 // ============================================================================
-std::string extractEmbedded(AudioData& AD, const AudioEmbedded& AE, const bool coverart, const std::string& FILE_SOURCE) {
-    if (coverart) {
+std::string extractEmbedded(AudioData& AD, const AudioEmbedded& AE, const bool& COVERART, const std::string& FILE_SOURCE) {
+    if (COVERART) {
         if (!AE.hasArt || AE.artSize == 0) return {};
         
         size_t lastSlash = FILE_SOURCE.find_last_of("/\\");

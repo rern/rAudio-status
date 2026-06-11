@@ -113,13 +113,13 @@ void parse_track_metadata(DBusMessageIter* dict_iter) {
             else if (k == "ImgHandle") {
                 const char* val;
                 dbus_message_iter_get_basic(&variant_iter, &val);
-                coverart = val;
+                COVERART = val;
             }
         }
         else if (k == "Duration" && type == DBUS_TYPE_UINT32) {
             uint32_t val;
             dbus_message_iter_get_basic(&variant_iter, &val);
-            Time = val / 1000;
+            TIME = val / 1000;
         }
         dbus_message_iter_next(&entry_iter);
     }
@@ -147,19 +147,19 @@ void parse_get_all_properties(DBusMessageIter* array_iter) {
             const char* val;
             dbus_message_iter_get_basic(&variant_iter, &val);
             std::string_view v(val);
-                 if (v == "paused")  state = "pause";
-            else if (v == "playing") state = "play";
-            else                     state = "stop";
+                 if (v == "paused")  STATE = "pause";
+            else if (v == "playing") STATE = "play";
+            else                     STATE = "stop";
         } else if (k == "Position" && type == DBUS_TYPE_UINT32) {
             uint32_t val;
             dbus_message_iter_get_basic(&variant_iter, &val);
-            elapsed = val / 1000;
+            ELAPSED = val / 1000;
         } else if (k == "Track" && type == DBUS_TYPE_ARRAY) {
             parse_track_metadata(&variant_iter);
         }
         dbus_message_iter_next(&entry_iter);
     }
-    if (elapsed == 0) state = "stop";
+    if (ELAPSED == 0) STATE = "stop";
 }
 
 // =============================================================================
@@ -264,7 +264,7 @@ bool get_media_transport_properties(DBusConnection* conn, const std::string& pla
 
                     CodecInfo result = decode_sampling_rate(config_bytes);
                     if (result.sample_rate > 0) {
-                        sampling = std::format("{:.1f}", result.sample_rate / 1000.0) +" kHz • "+ result.codec_name;
+                        SAMPLING = std::format("{:.1f}", result.sample_rate / 1000.0) +" kHz • "+ result.codec_name;
                     }
                     
                     found_config = true;

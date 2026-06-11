@@ -58,7 +58,7 @@ void coverartSave(const std::string& albumart_uri, std::string& path_no_ext) {
     curl_easy_cleanup(curl);
 
     // Check if the download was successful
-    if (res == CURLE_OK) coverart = path_ext.substr(9);
+    if (res == CURLE_OK) COVERART = path_ext.substr(9);
 }
 
 void coverartUpnp(std::string& path_no_ext) {
