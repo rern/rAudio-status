@@ -30,7 +30,9 @@ struct Global {
         VOLUMENONE  = false,
         WEBRADIO    = false,
         
+        PAUSE       = false,
         PLAY        = false,
+        STOP        = true,
         
         AIRPLAY     = false,
         BLUETOOTH   = false,
@@ -142,4 +144,10 @@ int64_t epochS() {
     return std::chrono::duration_cast<std::chrono::seconds>(
                 std::chrono::system_clock::now().time_since_epoch()
             ).count();
+}
+
+void stateSet() {
+         if (V.STATE == "stop") {V.STOP = true;  V.PLAY = false; V.PAUSE = false;}
+    else if (V.STATE == "play") {V.STOP = false; V.PLAY = true;  V.PAUSE = false;}
+    else                        {V.STOP = false; V.PLAY = false; V.PAUSE = true;}
 }

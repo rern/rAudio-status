@@ -68,9 +68,9 @@ void kv2var(const std::string& kv) {
                     value.replace(p, 2, "\"");
                     p += 1; // move past the replaced quote
                 }
-                     if (key == "Album")        S["Album"]   = value;
-                else if (key == "Artist")       S["Artist"]  = value;
-                else if (key == "Title")        S["Title"]   = value;
+                     if (key == "Album")        S["Album"]     = value;
+                else if (key == "Artist")       S["Artist"]    = value;
+                else if (key == "Title")        S["Title"]     = value;
                 else if (key == "coverart")     V.COVERART     = value;
                 else if (key == "state")        V.STATE        = value;
                 else if (key == "elapsed")      V.ELAPSED      = std::stoi(value);
@@ -80,7 +80,7 @@ void kv2var(const std::string& kv) {
                 else if (key == "station")      V.STATION      = value;
                 else if (key == "stationcover") V.STATIONCOVER = value;
                 
-                V.PLAY = V.STATE == "play";
+                stateSet();
             }
         }
     }
@@ -182,7 +182,7 @@ public:
             case MPD_STATE_PAUSE: V.STATE = "pause"; break;
             case MPD_STATE_STOP:  V.STATE = "stop";  break;
         }
-        V.PLAY = V.STATE == "play";
+        stateSet();
         if (V.PLAY) V.TIMESTAMP = epochMs();
         
         V.TIME     = mpd_status_get_total_time(status);
@@ -229,7 +229,7 @@ public:
         F       = "/mnt/MPD/"+ V.URI;
         V.URI_INI = V.URI.substr(0, 4);
         V.STREAM  = V.URI_INI == "http" || V.URI_INI == "rtmp" || V.URI_INI == "rtp:" || V.URI_INI == "rtsp";
-        if (V.STATE == "stop") V.TIME = mpd_song_get_duration(song); // 0 / false
+        if (V.STOP) V.TIME = mpd_song_get_duration(song); // 0 / false
         mpd_tag_type tags[] = {
             MPD_TAG_ARTIST,
             MPD_TAG_ALBUM,
@@ -307,7 +307,7 @@ int status() {
                 V.EXT       = "DAB";
                 V.ICON      = "dabradio";
                 dir_radio = "dabradio/";
-                if (V.STATE == "stop") V.SAMPLING = "48 kHz";
+                if (V.STOP) V.SAMPLING = "48 kHz";
             } else {
                 V.EXT       = "Radio";
                 dir_radio = "webradio/";
@@ -354,10 +354,10 @@ int status() {
         std::transform(V.EXT.begin(), V.EXT.end(), V.EXT.begin(), [](unsigned char c) {
             return std::toupper(c);
         });
-        if (V.COVERART.empty() || V.STATE == "stop") {
+        if (V.COVERART.empty() || V.STOP) {
             AudioData AD = Utils::readFile(F.c_str(), false);
             if (!AD.error) {
-                if (V.STATE == "stop") {
+                if (V.STOP) {
                     AudioMeta AM = getSampling(AD);
                     V.SAMPLERATE   = AM.sampleRate;
                     V.BITDEPTH     = AM.bitDepth;
@@ -397,15 +397,15 @@ int status() {
     }
     if (V.ICON.empty() && V.PLAYER != "mpd") V.ICON = V.PLAYER;
 
-    S["control"]      = V.CONTROL;
-    S["coverart"]     = V.COVERART;
-    S["ext"]          = V.EXT;
-    S["icon"]         = V.ICON;
-    S["file"]         = V.URI;
-    S["player"]       = V.PLAYER;
-    S["position"]     = position;
-    S["sampling"]     = V.SAMPLING;
-    S["state"]        = V.STATE;
+    S["control"]  = V.CONTROL;
+    S["coverart"] = V.COVERART;
+    S["ext"]      = V.EXT;
+    S["icon"]     = V.ICON;
+    S["file"]     = V.URI;
+    S["player"]   = V.PLAYER;
+    S["position"] = position;
+    S["sampling"] = V.SAMPLING;
+    S["state"]    = V.STATE;
     if (V.WEBRADIO) {
         S["station"]      = V.STATION;
         S["stationcover"] = V.STATIONCOVER;
@@ -423,11 +423,15 @@ int status() {
     B["stream"]       = V.STREAM;
     B["webradio"]     = V.WEBRADIO;
     
-    I["elapsed"]      = V.ELAPSED;
-    I["Time"]         = V.TIME;
-    I["volume"]       = V.VOLUME;
-    I["volumemute"]   = std::stoi(fileContent(V.DIR_SYSTEM +"volumemute",  "0"));
-    I["volumemax"]    = std::stoi(fileContent(V.DIR_SYSTEM +"volumelimit", "-1"));
+    B["pause"]        = V.PAUSE;
+    B["play"]         = V.PLAY;
+    B["stop"]         = V.STOP;
+    
+    I["elapsed"]    = V.ELAPSED;
+    I["Time"]       = V.TIME;
+    I["volume"]     = V.VOLUME;
+    I["volumemute"] = std::stoi(fileContent(V.DIR_SYSTEM +"volumemute",  "0"));
+    I["volumemax"]  = std::stoi(fileContent(V.DIR_SYSTEM +"volumelimit", "-1"));
     
 ////////////////////////////////////////////////////////////////////////////////
     if (V.JSON && !V.SNAPCLIENT) { // page, counts, display
@@ -455,7 +459,7 @@ int status() {
     if (V.JSON && !V.SNAPCLIENT) std::cout << "}\n";
 ////////////////////////////////////////////////////////////////////////////////
     std::string file_play = V.DIR_SHM +"play";
-    if ( V.PLAY) {
+    if (V.PLAY) {
         std::ofstream(file_play);
     } else {
         std::filesystem::remove(file_play);
