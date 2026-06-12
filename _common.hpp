@@ -48,6 +48,7 @@ int64_t
     START      = 0,
     TIMESTAMP  = 0;
 std::string
+    ARGV1,
     COVERART,
     CONTROL,
     DIR_DATA   = "/srv/http/data/",

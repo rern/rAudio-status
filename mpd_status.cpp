@@ -472,25 +472,22 @@ int status() {
     return 0;
 }
 
-enum Option { COVER, IP, HELP, LYRICS, STATUS, WEBSOCKET };
-Option parseOption(const std::string& arg) {
-    if (arg == "-c")                       return COVER;
-    if (arg == "-h")                       return HELP;
-    if (arg == "-i")                       return IP;
-    if (arg == "-l")                       return LYRICS;
-    if (arg == "-k") {JSON        = false; return STATUS;}
-    if (arg == "-s" ||
-        arg == "-so") {SNAPCLIENT = true;  return STATUS;} // status-push on track changed / ws on each client refresh
-    if (arg == "-w")                       return WEBSOCKET;
-    if (arg == "-W")                       return WEBSOCKET;
-                                           return STATUS;
+enum Option { EMBEDDED, IP, HELP, STATUS, WEBSOCKET };
+Option parseOption(const std::string& argv1) {
+    ARGV1 = argv1;
+    if (argv1 == "-c") return EMBEDDED;
+    if (argv1 == "-h") return HELP;
+    if (argv1 == "-i") return IP;
+    if (argv1 == "-l") return EMBEDDED;
+    if (argv1 == "-w") return WEBSOCKET;
+    if (argv1 == "-W") return WEBSOCKET;
+                       return STATUS;
 }
 
 int main(int argc, char **argv) {
     Option opt = argc == 1 ? STATUS : parseOption(argv[1]);
     switch (opt) {
-        case COVER:
-        case LYRICS: {
+        case EMBEDDED: {
             if (argc == 2) {
                 std::cerr << "Error: Target file missing\n";
                 return 1;
@@ -504,7 +501,7 @@ int main(int argc, char **argv) {
             }
             
             AudioEmbedded AE = getEmbeddedAudio(AD);
-            std::cout << extractEmbedded(AD, AE, opt == COVER, file);
+            std::cout << extractEmbedded(AD, AE, ARGV1 == "-c", file);
             return 0;
         }
         case IP:
@@ -515,7 +512,6 @@ int main(int argc, char **argv) {
                 << "\nGet status and data for rAudio\n\n"
                 << "Usage: " << argv[0] << " [OPTION]\n"
                 << "                 json format\n"
-                << "  -n             json with no '{' braces '}'\n"
                 << "  -k             key=value format (no counts and display)\n" // snapserver reply - client refresh
                 << "  -s             ws broadcast json(no counts and display)\n" // snapserver push  - server change
                 << "  -so              stdout instead of broadcast\n\n"
@@ -539,7 +535,7 @@ int main(int argc, char **argv) {
                 if (v0 >= '0' && v0 <= '9') {ip  = argv[2]; if (argc > 3) msg = argv[3];}
                 else                        {msg = argv[2]; if (argc > 3) ip  = argv[3];}
             }
-            if (std::string(argv[1]) == "-W") {
+            if (ARGV1 == "-W") {
                 return wsPush(ip, msg);
             } else {
                 WS_STATUS = wsSend(ip, msg);
@@ -550,12 +546,16 @@ int main(int argc, char **argv) {
             }
         }
         case STATUS: {
+            if (argc > 1) {
+                     if (ARGV1 == "-k")                   JSON       = false;
+                else if (ARGV1 == "-s" || ARGV1 == "-so") SNAPCLIENT = true; // status-push on track changed / ws on each client refresh
+            }
             int ok_status = status(); // std::cout in function
             if (!SNAPCLIENT || ok_status == 1) return ok_status;
             
             WS_STATUS.erase(0, 1);
             WS_STATUS = "{\"channel\": \"mpdplayer\", \"data\": {"+ WS_STATUS +"}}";
-            if (argv[1][2] == 'o') { // -so
+            if (ARGV1 == "-so") { // -so
                 std::cout << WS_STATUS << '\n';
                 return 0;
             }
