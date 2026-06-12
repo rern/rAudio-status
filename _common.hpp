@@ -34,12 +34,17 @@ struct Global {
         PLAY        = false,
         STOP        = true,
         
+        ALBUM       = false,
+        ARTIST      = false,
+        TITLE       = false,
+        
         AIRPLAY     = false,
         BLUETOOTH   = false,
         MPD         = false,
         SNAPCAST    = false,
         SPOTIFY     = false,
         UPNP        = false;
+        
     int
         BITDEPTH   = 0,
         BITRATE    = 0,
@@ -49,9 +54,11 @@ struct Global {
         SAMPLERATE = 0,
         TIME       = 0,
         VOLUME     = 0;
+        
     int64_t
         START      = 0,
         TIMESTAMP  = 0;
+        
     std::string
         COVERART,
         CONTROL,
@@ -61,6 +68,7 @@ struct Global {
         EXT,
         ICON,
         PLAYER,
+        POSITION,
         SAMPLING,
         STATE,
         STATION,
@@ -68,13 +76,12 @@ struct Global {
         URI,
         URI_INI,
         WS_STATUS;
+        
+    std::filesystem::path
+        FILE_COVER;
 };
 
 Global V;
-
-std::string                              ARGV1;
-    
-std::filesystem::path                        F;
 
 std::unordered_map<std::string, bool>        B;
 std::unordered_map<std::string, std::string> S;

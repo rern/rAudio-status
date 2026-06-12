@@ -225,10 +225,10 @@ public:
             std::this_thread::sleep_for(std::chrono::seconds(1));
             ++i;
         }
-        V.URI     = mpd_song_get_uri(song);
-        F       = "/mnt/MPD/"+ V.URI;
-        V.URI_INI = V.URI.substr(0, 4);
-        V.STREAM  = V.URI_INI == "http" || V.URI_INI == "rtmp" || V.URI_INI == "rtp:" || V.URI_INI == "rtsp";
+        V.URI      = mpd_song_get_uri(song);
+        V.FILE_COVER = "/mnt/MPD/"+ V.URI;
+        V.URI_INI  = V.URI.substr(0, 4);
+        V.STREAM   = V.URI_INI == "http" || V.URI_INI == "rtmp" || V.URI_INI == "rtp:" || V.URI_INI == "rtsp";
         if (V.STOP) V.TIME = mpd_song_get_duration(song); // 0 / false
         mpd_tag_type tags[] = {
             MPD_TAG_ARTIST,
@@ -349,13 +349,13 @@ int status() {
             }
         }
     } else if (V.PLLENGTH || V.SNAPCLIENT) {
-        V.COVERART = fileCover(F);
-        V.EXT      = F.extension().string().erase(0, 1);
+        V.COVERART = fileCover(V.FILE_COVER);
+        V.EXT      = V.FILE_COVER.extension().string().erase(0, 1);
         std::transform(V.EXT.begin(), V.EXT.end(), V.EXT.begin(), [](unsigned char c) {
             return std::toupper(c);
         });
         if (V.COVERART.empty() || V.STOP) {
-            AudioData AD = Utils::readFile(F.c_str(), false);
+            AudioData AD = Utils::readFile(V.FILE_COVER.c_str(), false);
             if (!AD.error) {
                 if (V.STOP) {
                     AudioMeta AM = getSampling(AD);
@@ -364,7 +364,7 @@ int status() {
                 }
                 if (V.COVERART.empty()) {
                     AudioEmbedded AE = getEmbeddedAudio(AD);
-                    V.COVERART         = extractEmbedded(AD, AE, true, F);
+                    V.COVERART       = extractEmbedded(AD, AE, true, V.FILE_COVER);
                 }
             }
         }
@@ -375,17 +375,16 @@ int status() {
         if (V.BITRATE)    V.SAMPLING += " "+ std::to_string(V.BITRATE) +" kHz";
     }
     V.SAMPLING += V.SAMPLING.empty() ? V.EXT : " • "+ V.EXT;
-    std::string position;
-    if (V.PLLENGTH > 1) position = std::to_string(V.POS + 1) +"/"+ std::to_string(V.PLLENGTH) +" • ";
+    if (V.PLLENGTH > 1) V.POSITION = std::to_string(V.POS + 1) +"/"+ std::to_string(V.PLLENGTH) +" • ";
     
-    bool album  = hasData("Album");
-    bool artist = hasData("Artist");
-    bool title  = hasData("Title");
+    V.ALBUM  = hasData("Album");
+    V.ARTIST = hasData("Artist");
+    V.TITLE  = hasData("Title");
     if (V.COVERART.empty()) {
         std::string path_no_ext;
-        if (album && artist) { // get already fetched
+        if (V.ARTIST && (V.ALBUM || V.TITLE)) { // get already fetched
             std::string path_no_ext = V.DIR_SHM +"online/";
-            path_no_ext += alphaNumericLower(S["Artist"] + S["Album"]);
+            path_no_ext += alphaNumericLower(S["Artist"] + S[V.ALBUM ? "Album" : "Title"]);
             for (const std::string& x : {".jpg", ".png"}) {
                 if (fileExists(path_no_ext + x)) {
                     V.COVERART = path_no_ext.substr(9) + x;
@@ -403,7 +402,7 @@ int status() {
     S["icon"]     = V.ICON;
     S["file"]     = V.URI;
     S["player"]   = V.PLAYER;
-    S["position"] = position;
+    S["position"] = V.POSITION;
     S["sampling"] = V.SAMPLING;
     S["state"]    = V.STATE;
     if (V.WEBRADIO) {
@@ -465,9 +464,9 @@ int status() {
         std::filesystem::remove(file_play);
     }
     
-    if (V.COVERART.empty() && artist && (album || title)) { // online coverart (in background)
+    if (V.COVERART.empty() && V.ARTIST && (V.ALBUM || V.TITLE)) { // online coverart (in background)
         std::string args = S["Artist"] +'\n';
-        if (album) {
+        if (V.ALBUM) {
             args += S["Album"] +"\nCMD ARTIST ALBUM";
         } else {
             args += S["Title"] +"\nCMD ARTIST TITLE";
@@ -478,6 +477,7 @@ int status() {
     return 0;
 }
 
+std::string ARGV1;
 enum Option { EMBEDDED, IP, HELP, STATUS, WEBSOCKET };
 Option parseOption(const std::string& argv1) {
     ARGV1 = argv1;
