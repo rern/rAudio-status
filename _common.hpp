@@ -22,58 +22,63 @@
 #include <unordered_set>
 #include <vector>
 
-bool
-    JSON        = true,
-    SNAPCLIENT  = false,
-    STREAM      = false,
-    VOLUMENONE  = false,
-    WEBRADIO    = false,
-    
-    AIRPLAY     = false,
-    BLUETOOTH   = false,
-    MPD         = false,
-    SNAPCAST    = false,
-    SPOTIFY     = false,
-    UPNP        = false;
-int
-    BITDEPTH   = 0,
-    BITRATE    = 0,
-    ELAPSED    = 0,
-    PLLENGTH   = 0,
-    POS        = 0,
-    SAMPLERATE = 0,
-    TIME       = 0,
-    VOLUME     = 0;
-int64_t
-    START      = 0,
-    TIMESTAMP  = 0;
-std::string
-    ARGV1,
-    COVERART,
-    CONTROL,
-    DIR_DATA   = "/srv/http/data/",
-    DIR_SHM      = DIR_DATA +"shm/",
-    DIR_SYSTEM   = DIR_DATA +"system/",
-    EXT,
-    ICON,
-    PLAYER,
-    SAMPLING,
-    STATE,
-    STATION,
-    STATIONCOVER,
-    URI,
-    URI_INI,
-    WS_STATUS;
-    
-std::filesystem::path F;
+struct Global {
+    bool
+        JSON        = true,
+        SNAPCLIENT  = false,
+        STREAM      = false,
+        VOLUMENONE  = false,
+        WEBRADIO    = false,
+        
+        PLAY        = false,
+        
+        AIRPLAY     = false,
+        BLUETOOTH   = false,
+        MPD         = false,
+        SNAPCAST    = false,
+        SPOTIFY     = false,
+        UPNP        = false;
+    int
+        BITDEPTH   = 0,
+        BITRATE    = 0,
+        ELAPSED    = 0,
+        PLLENGTH   = 0,
+        POS        = 0,
+        SAMPLERATE = 0,
+        TIME       = 0,
+        VOLUME     = 0;
+    int64_t
+        START      = 0,
+        TIMESTAMP  = 0;
+    std::string
+        COVERART,
+        CONTROL,
+        DIR_DATA   = "/srv/http/data/",
+        DIR_SHM    = DIR_DATA +"shm/",
+        DIR_SYSTEM = DIR_DATA +"system/",
+        EXT,
+        ICON,
+        PLAYER,
+        SAMPLING,
+        STATE,
+        STATION,
+        STATIONCOVER,
+        URI,
+        URI_INI,
+        WS_STATUS;
+};
 
-std::unordered_map<std::string, bool> B;
+Global V;
 
+std::string                              ARGV1;
+    
+std::filesystem::path                        F;
+
+std::unordered_map<std::string, bool>        B;
 std::unordered_map<std::string, std::string> S;
+std::unordered_map<std::string, int>         I;
 
-std::unordered_map<std::string, int> I;
-
-std::vector<std::string> VECTOR;
+std::vector<std::string>                VECTOR;
 
 std::string alphaNumericLower(const std::string& str) {
     std::string result;
