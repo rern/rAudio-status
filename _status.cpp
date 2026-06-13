@@ -14,10 +14,10 @@
 #include "upnp_coverart.hpp"
 #include "websocket.hpp"
 
-std::string fileCover(const std::string& file) {
+void fileCover(const std::string& file) {
     fs::path pathObj(file);
     std::string directory = pathObj.parent_path().string();
-    if (!fs::exists(directory)) return {};
+    if (!fs::exists(directory)) return;
 
     // Use static unordered_set so they are allocated only ONCE in memory
     static const std::unordered_set<std::string> names = {"cover", "album", "folder", "front"};
@@ -30,9 +30,15 @@ std::string fileCover(const std::string& file) {
         if (!exts.count(w)) continue; // O(1)
 
         w = entry.path().stem().string(); // [name].ext
-        if (names.count(w)) return entry.path().string();
+        if (names.count(w)) V.COVERART = entry.path().string();
     }
-    return {};
+    if (V.COVERART.empty()) {
+        AudioData AD = Utils::readFile(V.FILE.c_str(), false);
+        if (!AD.error) {
+            AudioEmbedded AE = getEmbeddedAudio(AD);
+            V.COVERART       = extractEmbedded(AD, AE, true, V.FILE);
+        }
+    }
 }
 
 bool hasData(const std::string& k) {
@@ -205,11 +211,25 @@ public:
         V.POS      = mpd_status_get_song_pos(status);
         V.PLLENGTH = mpd_status_get_queue_length(status);
         
-        const mpd_audio_format *audio = mpd_status_get_audio_format(status);
-        if (audio != nullptr) {
-            V.BITDEPTH   = audio->bits;
-            V.SAMPLERATE = audio->sample_rate;
-            V.BITRATE    = mpd_status_get_kbit_rate(status);
+        if (V.STOP) {
+            AudioData AD = Utils::readFile(V.FILE.c_str(), false);
+            if (!AD.error) {
+                AudioMeta AM = getSampling(AD);
+                V.BITDEPTH   = AM.bitDepth;
+                V.SAMPLERATE = AM.sampleRate;
+            }
+        } else {
+            const mpd_audio_format *audio = mpd_status_get_audio_format(status);
+            if (audio != nullptr) {
+                V.BITDEPTH   = audio->bits;
+                V.SAMPLERATE = audio->sample_rate;
+                V.BITRATE    = mpd_status_get_kbit_rate(status);
+            }
+        }
+        if (V.SAMPLERATE > 1000000) { // dsd
+            uint32_t base = (V.SAMPLERATE % 48000 == 0) ? 48000 : 44100;
+            V.SAMPLING = "DSD "+ std::to_string(V.SAMPLERATE / base) +" • "+
+                         std::format("{:.2f}", V.SAMPLERATE / 1000000.0) +" MHz";
         }
         
         B["updating_db"] = mpd_status_get_update_id(status) > 0;
@@ -241,10 +261,15 @@ public:
             std::this_thread::sleep_for(std::chrono::seconds(1));
             ++i;
         }
-        V.URI      = mpd_song_get_uri(song);
-        V.FILE_COVER = "/mnt/MPD/"+ V.URI;
-        V.URI_INI  = V.URI.substr(0, 4);
-        V.STREAM   = V.URI_INI == "http" || V.URI_INI == "rtmp" || V.URI_INI == "rtp:" || V.URI_INI == "rtsp";
+        V.URI     = mpd_song_get_uri(song);
+        V.FILE    = "/mnt/MPD/"+ V.URI;
+        V.EXT     = V.FILE.extension().string().erase(0, 1);
+        std::transform(V.EXT.begin(), V.EXT.end(), V.EXT.begin(), [](unsigned char c) {
+            return std::toupper(c);
+        });
+        V.URI_INI = V.URI.substr(0, 4);
+        std::unordered_set<std::string> scheme = {"http", "rtmp", "rtp:", "rtsp"};
+        V.STREAM  = scheme.count(V.URI_INI) > 0;
         if (V.STOP) V.TIME = mpd_song_get_duration(song); // 0 / false
         mpd_tag_type tags[] = {
             MPD_TAG_ARTIST,
@@ -257,10 +282,21 @@ public:
         for (mpd_tag_type tag : tags) {
             const char* k = mpd_tag_name(tag);
             const char* v = mpd_song_get_tag(song, tag, 0);
-// S[k]
-            S.emplace(k, v ? v : ""); // S[k] = v ? v : "";
+// S[k] = v ? v : "";
+            S.emplace(k, v ? v : "");
         }
         mpd_song_free(song);
+        
+        if (S["Artist"].empty()) {
+            if (S["AlbumArtist"].empty()) {
+                S["Artist"] = V.FILE.parent_path().filename().string();
+            } else {
+                S["Artist"] = S["AlbumArtist"];
+            }
+        }
+        if (S["Title"].empty()) S["Title"] = V.FILE.stem().string();
+        
+        if (V.COVER) fileCover(V.FILE);
     }
 };
 
@@ -275,12 +311,15 @@ int status() {
             
     if (V.MPD || V.UPNP) {
         std::string dir_mpd = DIR.DATA +"mpd";
-        if (fs::is_symlink(dir_mpd) && directoryIsEmpty(dir_mpd)) {
-            std::system("timeout 1 mount -a");
-            if (directoryIsEmpty(dir_mpd)) {
+        struct statfs buf;
+        if (fs::is_symlink(dir_mpd) && statfs(dir_mpd.c_str(), &buf) != 0) {
+            std::system("timeout 1 mount -a &> /dev/null");
+            if (statfs(dir_mpd.c_str(), &buf) != 0) {
                 std::cerr << "Shared Data server not found.\n";
                 return 1;
             }
+            
+            std::system("systemctl start mpd");
         }
         
         MPDclient MPD;
@@ -388,28 +427,6 @@ int status() {
                 }
             }
         }
-    } else if (V.PLLENGTH || V.SNAPCLIENT) {
-        V.EXT = V.FILE_COVER.extension().string().erase(0, 1);
-        std::transform(V.EXT.begin(), V.EXT.end(), V.EXT.begin(), [](unsigned char c) {
-            return std::toupper(c);
-        });
-        if (V.COVER) {
-            V.COVERART = fileCover(V.FILE_COVER);
-            if (V.COVERART.empty() || V.STOP) {
-                AudioData AD = Utils::readFile(V.FILE_COVER.c_str(), false);
-                if (!AD.error) {
-                    if (V.STOP) {
-                        AudioMeta AM = getSampling(AD);
-                        V.SAMPLERATE   = AM.sampleRate;
-                        V.BITDEPTH     = AM.bitDepth;
-                    }
-                    if (V.COVERART.empty()) {
-                        AudioEmbedded AE = getEmbeddedAudio(AD);
-                        V.COVERART       = extractEmbedded(AD, AE, true, V.FILE_COVER);
-                    }
-                }
-            }
-        }
     }
     if (V.SAMPLING.empty()) {
         if (V.BITDEPTH)   V.SAMPLING += std::to_string(V.BITDEPTH) +"bit ";
@@ -463,7 +480,6 @@ int status() {
     B["shareddata"]   = fileExists("/mnt/MPD/NAS/data/sharedip");
     B["stoptimer"]    = fileExists(DIR.SHM +"pidstoptimer");
     B["updateaddons"] = fileExists(DIR.DATA +"addons/update");
-    B["stream"]       = V.STREAM;
     B["webradio"]     = V.WEBRADIO;
     
     B["pause"]        = V.PAUSE;

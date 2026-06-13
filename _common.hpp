@@ -16,6 +16,7 @@
 #include <poll.h>
 #include <string>
 #include <string_view>
+#include <sys/vfs.h>
 #include <thread>
 #include <unistd.h>
 #include <unordered_map>
@@ -53,14 +54,16 @@ struct Global {
         ELAPSED    = 0,
         PLLENGTH   = 0,
         POS        = 0,
-        SAMPLERATE = 0,
         TIME       = 0,
         VOLUME     = 0;
-        
+    
     int64_t
         START      = 0,
         TIMESTAMP  = 0;
-        
+    
+    uint32_t
+        SAMPLERATE = 0;
+    
     std::string
         COVERART,
         CONTROL,
@@ -81,7 +84,7 @@ struct Global {
         SYSTEM = DATA +"system/";
         
     fs::path
-        FILE_COVER;
+        FILE;
 };
 
 Global DIR, V;
@@ -99,10 +102,6 @@ std::string alphaNumericLower(const std::string& str) {
         if (std::isalnum(lower)) result.push_back(lower);
     }
     return result;
-}
-
-bool directoryIsEmpty(const std::string& dir){
-    return fs::directory_iterator(dir) == fs::directory_iterator();
 }
 
 bool fileContains(const std::string& sub, const std::string& file) {
