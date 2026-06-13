@@ -616,8 +616,8 @@ int main(int argc, char **argv) {
         << "          (with option: no counts and diaplay)\n"
         << "  -o    \n"
         << "  -p    websocket push localhost\n"
-        << "  -b    websocket broadcast\n\n"    // snapserver push on change
-        << "  -k    key=value format\n"         // snapserver reply on snapclient refresh
+        << "  -b    websocket broadcast\n"    // snapserver push on change
+        << "  -k    key=value format\n\n"         // snapserver reply on snapclient refresh
         
         << "Embedded: " << argv[0] << " [-L|-C] <FILE>\n"
         << "  -L    extract embedded lyrics to stdout\n"
