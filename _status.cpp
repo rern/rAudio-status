@@ -1,4 +1,4 @@
-// g++ -O2 mpd_status.cpp -o /srv/http/bash/status \
+// g++ -O2 _status.cpp -o /srv/http/bash/status \
     $( pkg-config --cflags --libs alsa,dbus-1,libcurl,libmpdclient,libupnpp,taglib )
 
 #include "_common.hpp"
