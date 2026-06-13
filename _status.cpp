@@ -547,93 +547,88 @@ int status() {
     return 0;
 }
 
-std::string ARGV1;
-enum Option { EMBEDDED, IP, HELP, STATUS, WEBSOCKET };
-Option parseOption(const std::string& argv1) {
-    ARGV1 = argv1;
-    if (argv1 == "-c") return EMBEDDED;
-    if (argv1 == "-h") return HELP;
-    if (argv1 == "-i") return IP;
-    if (argv1 == "-l") return EMBEDDED;
-    if (argv1 == "-w") return WEBSOCKET;
-    if (argv1 == "-W") return WEBSOCKET;
-                       return STATUS;
-}
-
 int main(int argc, char **argv) {
-    Option opt = argc == 1 ? STATUS : parseOption(argv[1]);
-    switch (opt) {
-        case EMBEDDED: {
-            if (argc == 2) {
-                std::cerr << "Error: Target file missing\n";
-                return 1;
-            }
-            
-            std::string file = argv[2];
-            AudioData AD = Utils::readFile(file, true);
-            if (AD.error) return 1;
-            
-            AudioEmbedded AE = getEmbeddedAudio(AD);
-            std::cout << extractEmbedded(AD, AE, ARGV1 == "-c", file);
-            return 0;
+    if (argc == 1) return status();
+    
+    std::string ARGV1 = argv[1];
+    if (ARGV1 == "-C" || ARGV1 == "-L") {
+        if (argc == 2) {
+            std::cerr << "Error: Source file missing\n";
+            return 1;
         }
-        case IP:
-            std::cout << ipAddress() << '\n';
-            return 0;
-        case HELP:
-            std::cerr
-                << "\nGet status and data for rAudio\n\n"
-                << "Usage: " << argv[0] << " [OPTION]\n"
-                << "                 json format\n"
-                << "  -k             key=value format (no counts and display)\n" // snapserver reply - client refresh
-                << "  -s             ws broadcast json(no counts and display)\n" // snapserver push  - server change
-                << "  -so              stdout instead of broadcast\n\n"
-                
-                << "  -l <FILE>      extract embedded lyrics to stdout\n"
-                << "  -c <FILE>      extract embedded coverart to cover.jpg/png\n"
-                << "                 and save to directory of FILE\n\n"
-                
-                << "  -w [IP] [MSG]  websocket: send - wait for reply\n"
-                << "  -W [IP] [MSG]  websocket: send only - exit immediately (push)\n"
-                << "                 IP default: 127.0.0.1 (localhost)\n\n"
-                
-                << "  -i             get system IP address\n";
-            return 0;
-        case WEBSOCKET: {
-            std::string
-                ip  = "127.0.0.1",
-                msg = "ping";
-            if (argc > 2) {
-                char v0 = argv[2][0];
-                if (v0 >= '0' && v0 <= '9') {ip  = argv[2]; if (argc > 3) msg = argv[3];}
-                else                        {msg = argv[2]; if (argc > 3) ip  = argv[3];}
-            }
-            if (ARGV1 == "-W") {
-                return wsPush(ip, msg);
-            } else {
-                V.WS_STATUS = wsSend(ip, msg);
-                if (V.WS_STATUS.empty()) return 1;
-                
-                std::cout << V.WS_STATUS << '\n';
-                return 0;
-            }
-        }
-        case STATUS: {
-            if (argc > 1) {
-                     if (ARGV1 == "-k")                   V.JSON       = false;
-                else if (ARGV1 == "-s" || ARGV1 == "-so") V.SNAPCLIENT = true; // status-push on track changed / ws on each client refresh
-            }
-            int ok_status = status(); // std::cout in function
-            if (!V.SNAPCLIENT || ok_status == 1) return ok_status;
-            
-            V.WS_STATUS.erase(0, 1);
-            V.WS_STATUS = "{\"channel\": \"mpdplayer\", \"data\": {"+ V.WS_STATUS +"}}";
-            if (ARGV1 == "-so") { // -so
-                std::cout << V.WS_STATUS << '\n';
-                return 0;
-            }
-            
-            return wsBroadcast(V.WS_STATUS); // snapserver broadcast on change
-        }
+        
+        std::string file = argv[2];
+        AudioData AD = Utils::readFile(file, true);
+        if (AD.error) return 1;
+        
+        AudioEmbedded AE = getEmbeddedAudio(AD);
+        std::cout << extractEmbedded(AD, AE, ARGV1 == "-C", file);
+        return 0;
     }
+    if (ARGV1 == "-I") {
+        std::cout << ipAddress() << '\n';
+        return 0;
+    }
+    if (ARGV1 == "-W" || ARGV1 == "-P") {
+        std::string
+            ip  = "127.0.0.1",
+            msg = "ping";
+        if (argc > 2) {
+            char v0 = argv[2][0];
+            if (v0 >= '0' && v0 <= '9') {ip  = argv[2]; if (argc > 3) msg = argv[3];}
+            else                        {msg = argv[2]; if (argc > 3) ip  = argv[3];}
+        }
+        if (ARGV1 == "-P") return wsPush(ip, msg);
+        
+        V.WS_STATUS = wsSend(ip, msg);
+        if (V.WS_STATUS.empty()) return 1;
+        
+        std::cout << V.WS_STATUS << '\n';
+        return 0;
+    }
+    
+    if (ARGV1 == "-k") {
+        V.JSON = false;
+        return status();
+    }
+    
+    V.SNAPCLIENT = true; // status-push on track changed / ws on each client refresh
+    
+    int ok_status = status();
+    if (ok_status == 1) return 1;
+    
+    V.WS_STATUS.erase(0, 1);
+    V.WS_STATUS = "{\"channel\": \"mpdplayer\", \"data\": {"+ V.WS_STATUS +"}}";
+    
+    if (ARGV1 == "-p") return wsPush("127.0.0.1", V.WS_STATUS);
+        
+    if (ARGV1 == "-b") return wsBroadcast(V.WS_STATUS); // snapserver broadcast on change
+    
+    if (ARGV1 == "-o") {
+        std::cout << V.WS_STATUS << '\n';
+        return 0;
+    }
+    
+    std::cout
+        << "\nGet status and data for rAudio\n\n"
+        << "Usage: " << argv[0] << " [-k|-p|-b|-o]\n"
+        << "        default: json format\n"
+        << "          (with option: no counts and diaplay)\n"
+        << "  -o    \n"
+        << "  -p    websocket push localhost\n"
+        << "  -b    websocket broadcast\n\n"    // snapserver push on change
+        << "  -k    key=value format\n"         // snapserver reply on snapclient refresh
+        
+        << "Embedded: " << argv[0] << " [-L|-C] <FILE>\n"
+        << "  -L    extract embedded lyrics to stdout\n"
+        << "  -C    extract embedded coverart to cover.jpg/png\n"
+        << "        and save to directory of FILE\n\n"
+        
+        << "Websocket: " << argv[0] << " [-W|-P] [IP] [MSG]\n"
+        << "  -W    websocket send - wait for reply\n"
+        << "  -P    websocket push - exit immediately\n"
+        << "          IP default: 127.0.0.1 (localhost)\n\n"
+        
+        << "  -I    system IP address\n";
+    return 0;
 }
