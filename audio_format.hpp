@@ -107,7 +107,7 @@ namespace Utils {
         AudioData AD;
         std::ifstream file(FILE_SOURCE, std::ios::binary);
         if (!file) {
-            std::cerr << "Error: std::ifstream\n";
+            std::cerr << "Error: AudioData readFile - " << FILE_SOURCE << '\n';
         } else {
             std::vector<uint8_t> buf(4096);
             file.read((char*)buf.data(), buf.size());

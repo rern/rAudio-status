@@ -291,11 +291,16 @@ void bluezMeta() {
     check_error(&err);
     
     std::ifstream file("/srv/http/data/shm/bluetoothdest");
+    if (!file) {
+        std::cerr << "Error: bluezMeta\n";
+        return;
+    }
+    
     std::string player_dest;
     std::getline(file, player_dest);
 
     if (player_dest.empty()) {
-        std::cerr << "Error: Source destination configuration data file is empty.\n";
+        std::cerr << "Error: file empty\n";
         dbus_connection_unref(conn);
         return;
     }

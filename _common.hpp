@@ -27,7 +27,7 @@ namespace fs = std::filesystem;
 
 struct Global {
     bool
-        COVER       = false,
+        COVER       = true,
         JSON        = true,
         PAUSE       = false,
         PLAY        = false,
@@ -106,23 +106,27 @@ std::string alphaNumericLower(const std::string& str) {
 
 bool fileContains(const std::string& sub, const std::string& file) {
     std::ifstream f(file);
-    if (!f) return false;
+    if (!f) {
+        std::cerr << "Error: fileContains - " << file << '\n';
+        return false;
+    }
     
     std::string line;
     while (std::getline(f, line)) {
         if (line.find(sub) != std::string::npos) {
-            f.close();
             return true;
 //..............................................................................
         }
     }
-    f.close();
     return false;
 }
 
 std::string fileContent(const std::string& file, const std::string& def = {}) {
     std::ifstream f(file);
-    if (!f) return def;
+    if (!f) {
+        if (def.empty()) std::cerr << "Error: fileContent - " << file << '\n';
+        return def;
+    }
     
     std::stringstream buffer;
     buffer << f.rdbuf();
@@ -133,14 +137,17 @@ std::string fileContent(const std::string& file, const std::string& def = {}) {
 
 std::vector<std::string> fileContentLines(const std::string& file) {
     std::vector<std::string> lines;
-    std::ifstream file_object(file);
-    if (!file_object.is_open()) return lines;
+    std::ifstream f(file);
+    if (!f) {
+        std::cerr << "Error: fileContentLines - " << file << '\n';
+        return lines;
+    }
 //..............................................................................
     std::string line;
-    while (std::getline(file_object, line)) {
+    while (std::getline(f, line)) {
         lines.push_back(line);
     }
-    return lines; // vetor
+    return lines; // vector
 }
 
 bool fileExists(const std::string& file) {

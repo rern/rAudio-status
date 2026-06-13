@@ -211,25 +211,13 @@ public:
         V.POS      = mpd_status_get_song_pos(status);
         V.PLLENGTH = mpd_status_get_queue_length(status);
         
-        if (V.STOP) {
-            AudioData AD = Utils::readFile(V.FILE.c_str(), false);
-            if (!AD.error) {
-                AudioMeta AM = getSampling(AD);
-                V.BITDEPTH   = AM.bitDepth;
-                V.SAMPLERATE = AM.sampleRate;
-            }
-        } else {
+        if (!V.STOP) {
             const mpd_audio_format *audio = mpd_status_get_audio_format(status);
             if (audio != nullptr) {
                 V.BITDEPTH   = audio->bits;
                 V.SAMPLERATE = audio->sample_rate;
                 V.BITRATE    = mpd_status_get_kbit_rate(status);
             }
-        }
-        if (V.SAMPLERATE > 1000000) { // dsd
-            uint32_t base = (V.SAMPLERATE % 48000 == 0) ? 48000 : 44100;
-            V.SAMPLING = "DSD "+ std::to_string(V.SAMPLERATE / base) +" • "+
-                         std::format("{:.2f}", V.SAMPLERATE / 1000000.0) +" MHz";
         }
         
         B["updating_db"] = mpd_status_get_update_id(status) > 0;
@@ -297,6 +285,14 @@ public:
         if (S["Title"].empty()) S["Title"] = V.FILE.stem().string();
         
         if (V.COVER) fileCover(V.FILE);
+        if (V.STOP && !V.STREAM) {
+            AudioData AD = Utils::readFile(V.FILE.c_str(), false);
+            if (!AD.error) {
+                AudioMeta AM = getSampling(AD);
+                V.BITDEPTH   = AM.bitDepth;
+                V.SAMPLERATE = AM.sampleRate;
+            }
+        }
     }
 };
 
@@ -340,11 +336,16 @@ int status() {
     }
     
     std::ifstream file(DIR.SYSTEM +"display.json");
-    std::string line;
-    while (std::getline(file, line)) {
-        if ((line.find("\"cover\": true")    != std::string::npos) &&
-            (line.find("\"vumeter\": false") != std::string::npos)) {
-            V.COVER = true;
+    if (!file) {
+        std::cerr << "Error: display.json\n";
+    } else {
+        std::string line;
+        while (std::getline(file, line)) {
+            if (line.find("\"cover\": false")  != std::string::npos ||
+                line.find("\"vumeter\": true") != std::string::npos) {
+                V.COVER = false;
+                break;
+            }
         }
     }
     
@@ -428,6 +429,13 @@ int status() {
             }
         }
     }
+    
+    if (V.SAMPLERATE > 1000000) { // dsd
+        uint32_t base = (V.SAMPLERATE % 48000 == 0) ? 48000 : 44100;
+        V.SAMPLING = "DSD "+ std::to_string(V.SAMPLERATE / base) +" • "+
+                     std::format("{:.2f}", V.SAMPLERATE / 1000000.0) +" MHz";
+    }
+        
     if (V.SAMPLING.empty()) {
         if (V.BITDEPTH)   V.SAMPLING += std::to_string(V.BITDEPTH) +"bit ";
         if (V.SAMPLERATE) V.SAMPLING += std::format("{:.1f}", V.SAMPLERATE / 1000.0) +" kHz";
@@ -563,10 +571,7 @@ int main(int argc, char **argv) {
             
             std::string file = argv[2];
             AudioData AD = Utils::readFile(file, true);
-            if (AD.error) {
-                std::cerr << "Error: Read file\n";
-                return 1;
-            }
+            if (AD.error) return 1;
             
             AudioEmbedded AE = getEmbeddedAudio(AD);
             std::cout << extractEmbedded(AD, AE, ARGV1 == "-c", file);
