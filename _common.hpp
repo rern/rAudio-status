@@ -22,17 +22,19 @@
 #include <unordered_set>
 #include <vector>
 
+namespace fs = std::filesystem;
+
 struct Global {
     bool
+        COVER       = false,
         JSON        = true,
+        PAUSE       = false,
+        PLAY        = false,
         SNAPCLIENT  = false,
+        STOP        = true,
         STREAM      = false,
         VOLUMENONE  = false,
         WEBRADIO    = false,
-        
-        PAUSE       = false,
-        PLAY        = false,
-        STOP        = true,
         
         ALBUM       = false,
         ARTIST      = false,
@@ -62,9 +64,6 @@ struct Global {
     std::string
         COVERART,
         CONTROL,
-        DIR_DATA   = "/srv/http/data/",
-        DIR_SHM    = DIR_DATA +"shm/",
-        DIR_SYSTEM = DIR_DATA +"system/",
         EXT,
         ICON,
         PLAYER,
@@ -75,13 +74,17 @@ struct Global {
         STATIONCOVER,
         URI,
         URI_INI,
-        WS_STATUS;
+        WS_STATUS,
         
-    std::filesystem::path
+        DATA   = "/srv/http/data/",
+        SHM    = DATA +"shm/",
+        SYSTEM = DATA +"system/";
+        
+    fs::path
         FILE_COVER;
 };
 
-Global V;
+Global DIR, V;
 
 std::unordered_map<std::string, bool>        B;
 std::unordered_map<std::string, std::string> S;
@@ -98,8 +101,8 @@ std::string alphaNumericLower(const std::string& str) {
     return result;
 }
 
-bool fileExists(const std::string& file) {
-    return std::filesystem::exists(file);
+bool directoryIsEmpty(const std::string& dir){
+    return fs::directory_iterator(dir) == fs::directory_iterator();
 }
 
 bool fileContains(const std::string& sub, const std::string& file) {
@@ -139,6 +142,10 @@ std::vector<std::string> fileContentLines(const std::string& file) {
         lines.push_back(line);
     }
     return lines; // vetor
+}
+
+bool fileExists(const std::string& file) {
+    return fs::exists(file);
 }
 
 int64_t epochMs() {

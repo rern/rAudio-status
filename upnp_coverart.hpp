@@ -25,7 +25,7 @@ void coverartSave(const std::string& albumart_uri, std::string& path_no_ext) {
         return;
     }
 
-    std::filesystem::path p(albumart_uri);
+    fs::path p(albumart_uri);
     std::string path_ext = path_no_ext + p.extension().string();
     // Open target file in binary write mode ("wb")
     fp = fopen(path_ext.c_str(), "wb");

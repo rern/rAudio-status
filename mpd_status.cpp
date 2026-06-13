@@ -15,7 +15,6 @@
 #include "websocket.hpp"
 
 std::string fileCover(const std::string& file) {
-    namespace fs = std::filesystem;
     fs::path pathObj(file);
     std::string directory = pathObj.parent_path().string();
     if (!fs::exists(directory)) return {};
@@ -85,6 +84,23 @@ void kv2var(const std::string& kv) {
         }
     }
 }
+void radioArtistTitle() {
+    std::string title = S["Title"];
+    if (title.empty()) return;
+    
+    std::string split;
+         if (title.find(" - ") != std::string::npos) split = " - ";
+    else if (title.find(": ")  != std::string::npos) split = ": ";
+    if (split.empty()) return;
+    
+    size_t p    = title.find(split);
+    S["Artist"] = title.substr(0, p);
+    title       = title.substr(p + split.length());
+    if (fileContains(title, "/srv/http/assets/data/titles_with_paren")) {
+        title.erase(title.find(" ("));
+    }
+    S["Title"]  = title;
+}
 
 void statusFormat(const std::string& k, const std::string& v) {
     std::vector<std::string> key_BI = {"elapsed", "pllength", "song", "Time", "volume", "webradio"};
@@ -137,18 +153,18 @@ void rendererStatus() {
     
     std::string kv;
     if (V.SNAPCAST) {                // V.SNAPCLIENT js: REFRESHDATA() > PLAYBACK.get()
-        std::string ip = fileContent(V.DIR_SHM +"snapserverip");
+        std::string ip = fileContent(DIR.SHM +"snapserverip");
         kv = wsSend(ip, "status"); // websocket server status -k > reply key=value
     } else {
         if (V.AIRPLAY) {
             std::string v;
             for (const std::string& k : {"Album", "Artist", "coverart", "elapsed", "start", "state", "Time", "Title"}) {
-                v = fileContent(V.DIR_SHM +"airplay/"+ k);
+                v = fileContent(DIR.SHM +"airplay/"+ k);
                 if (!v.empty()) kv += k +'='+ v +'\n';
             }
             V.SAMPLING  = "16 bit 44.1 kHz 1.41 Mbit/s • AirPlay";
         } else if (V.SPOTIFY) {
-            kv = fileContent(V.DIR_SHM +"spotify/status");
+            kv = fileContent(DIR.SHM +"spotify/status");
             V.SAMPLING  = "48 kHz 320 kbit/s • Spotify";
         }
         if (V.PLAY && V.ELAPSED) V.ELAPSED = epochS() - V.START + 1;
@@ -249,7 +265,7 @@ public:
 };
 
 int status() {
-    V.PLAYER = fileContent(V.DIR_SHM +"player");
+    V.PLAYER = fileContent(DIR.SHM +"player");
          if (V.PLAYER == "airplay")   V.AIRPLAY   = true;
     else if (V.PLAYER == "bluetooth") V.BLUETOOTH = true;
     else if (V.PLAYER == "mpd")       V.MPD       = true;
@@ -258,6 +274,15 @@ int status() {
     else if (V.PLAYER == "upnp")      V.UPNP      = true;
             
     if (V.MPD || V.UPNP) {
+        std::string dir_mpd = DIR.DATA +"mpd";
+        if (fs::is_symlink(dir_mpd) && directoryIsEmpty(dir_mpd)) {
+            std::system("timeout 1 mount -a");
+            if (directoryIsEmpty(dir_mpd)) {
+                std::cerr << "Shared Data server not found.\n";
+                return 1;
+            }
+        }
+        
         MPDclient MPD;
         if (!MPD.ok()) {
             std::cerr << "MPD connection failed\n";
@@ -275,14 +300,23 @@ int status() {
         rendererStatus();
     }
     
-    if (fileExists(V.DIR_SHM +"btmixer") && !fileExists(V.DIR_SYSTEM +"devicewithbt")) {
-        V.CONTROL = fileContent(V.DIR_SHM +"btmixer");
+    std::ifstream file(DIR.SYSTEM +"display.json");
+    std::string line;
+    while (std::getline(file, line)) {
+        if ((line.find("\"cover\": true")    != std::string::npos) &&
+            (line.find("\"vumeter\": false") != std::string::npos)) {
+            V.COVER = true;
+        }
+    }
+    
+    if (fileExists(DIR.SHM +"btmixer") && !fileExists(DIR.SYSTEM +"devicewithbt")) {
+        V.CONTROL = fileContent(DIR.SHM +"btmixer");
         V.VOLUME  = getVolume("bluealsa", V.CONTROL);
     } else {
-        V.CONTROL = fileContent(V.DIR_SHM +"amixercontrol");
-        if (V.CONTROL == "none" || fileExists(V.DIR_SHM +"nosound")) {
+        V.CONTROL = fileContent(DIR.SHM +"amixercontrol");
+        if (V.CONTROL == "none" || fileExists(DIR.SHM +"nosound")) {
             V.VOLUMENONE = true;
-        } else if (fileContains("mixertype=hardware", V.DIR_SHM +"output")) {
+        } else if (fileContains("mixertype=hardware", DIR.SHM +"output")) {
             V.VOLUME = getVolume("default", V.CONTROL);
         }
     }
@@ -292,9 +326,9 @@ int status() {
         V.ICON     = "audiocd";
         V.SAMPLING = "16 bit 44.1 kHz 1.41 Mbit/s";
         std::string
-            discid = fileContent(V.DIR_SHM +"audiocd"),
+            discid = fileContent(DIR.SHM +"audiocd"),
             track  = V.URI.substr(V.URI.find("://") + 3); // cdda://N > N
-        kv2var(fileContent(V.DIR_DATA +"audiocd/"+ discid +'/'+ track));
+        kv2var(fileContent(DIR.DATA +"audiocd/"+ discid +'/'+ track));
     } else if (V.STREAM) {
         if (V.UPNP) {
             V.EXT      = "UPnP";
@@ -319,25 +353,31 @@ int status() {
                 } else {
                     V.ICON = "webradio";
                 }
-                if (V.PLAY && V.ICON != "webradio") { // radiofrance / radioparadise
-                    if (!V.STATION.empty()) V.EXT = V.STATION.substr(V.STATION.find(" - ") + 3);
-                    if (fileExists(V.DIR_SHM +"radio")) {
-                        std::string status = fileContent(V.DIR_SHM +"status");
-                        kv2var(status);
+                if (V.PLAY) {
+                    if (V.ICON != "webradio") { // radiofrance / radioparadise
+                        if (!V.STATION.empty()) V.EXT = V.STATION.substr(V.STATION.find(" - ") + 3);
+                        if (fileExists(DIR.SHM +"radio")) {
+                            std::string status = fileContent(DIR.SHM +"status");
+                            kv2var(status);
+                        } else {
+                            std::string cmd = "systemctl start "+ std::string(V.EXT == "DAB" ? "dab" : "radio") +" &> /dev/null &";
+                            std::system(cmd.c_str());
+                        }
                     } else {
-                        std::string cmd = "systemctl start "+ std::string(V.EXT == "DAB" ? "dab" : "radio") +" &> /dev/null &";
-                        std::system(cmd.c_str());
+                        radioArtistTitle();
                     }
                 }
             }
-            for (const std::string& x : {".jpg", ".png", ".gif"}) {
-                std::string f = V.DIR_DATA + dir_radio +"img/"+ url + x;
-                if (fileExists(f)) {
-                    V.STATIONCOVER = f.substr(9);
-                    break;
+            if (V.COVER) {
+                for (const std::string& x : {".jpg", ".png", ".gif"}) {
+                    std::string f = DIR.DATA + dir_radio +"img/"+ url + x;
+                    if (fileExists(f)) {
+                        V.STATIONCOVER = f.substr(9);
+                        break;
+                    }
                 }
             }
-            for (const auto& entry : std::filesystem::recursive_directory_iterator(V.DIR_DATA + dir_radio)) {
+            for (const auto& entry : fs::recursive_directory_iterator(DIR.DATA + dir_radio)) {
                 if (entry.is_regular_file() && entry.path().filename() == url) {
                     VECTOR = fileContentLines(entry.path().string());
                     if (VECTOR.size()) {
@@ -349,22 +389,24 @@ int status() {
             }
         }
     } else if (V.PLLENGTH || V.SNAPCLIENT) {
-        V.COVERART = fileCover(V.FILE_COVER);
-        V.EXT      = V.FILE_COVER.extension().string().erase(0, 1);
+        V.EXT = V.FILE_COVER.extension().string().erase(0, 1);
         std::transform(V.EXT.begin(), V.EXT.end(), V.EXT.begin(), [](unsigned char c) {
             return std::toupper(c);
         });
-        if (V.COVERART.empty() || V.STOP) {
-            AudioData AD = Utils::readFile(V.FILE_COVER.c_str(), false);
-            if (!AD.error) {
-                if (V.STOP) {
-                    AudioMeta AM = getSampling(AD);
-                    V.SAMPLERATE   = AM.sampleRate;
-                    V.BITDEPTH     = AM.bitDepth;
-                }
-                if (V.COVERART.empty()) {
-                    AudioEmbedded AE = getEmbeddedAudio(AD);
-                    V.COVERART       = extractEmbedded(AD, AE, true, V.FILE_COVER);
+        if (V.COVER) {
+            V.COVERART = fileCover(V.FILE_COVER);
+            if (V.COVERART.empty() || V.STOP) {
+                AudioData AD = Utils::readFile(V.FILE_COVER.c_str(), false);
+                if (!AD.error) {
+                    if (V.STOP) {
+                        AudioMeta AM = getSampling(AD);
+                        V.SAMPLERATE   = AM.sampleRate;
+                        V.BITDEPTH     = AM.bitDepth;
+                    }
+                    if (V.COVERART.empty()) {
+                        AudioEmbedded AE = getEmbeddedAudio(AD);
+                        V.COVERART       = extractEmbedded(AD, AE, true, V.FILE_COVER);
+                    }
                 }
             }
         }
@@ -377,21 +419,23 @@ int status() {
     V.SAMPLING += V.SAMPLING.empty() ? V.EXT : " • "+ V.EXT;
     if (V.PLLENGTH > 1) V.POSITION = std::to_string(V.POS + 1) +"/"+ std::to_string(V.PLLENGTH) +" • ";
     
-    V.ALBUM  = hasData("Album");
-    V.ARTIST = hasData("Artist");
-    V.TITLE  = hasData("Title");
-    if (V.COVERART.empty()) {
-        std::string path_no_ext;
-        if (V.ARTIST && (V.ALBUM || V.TITLE)) { // get already fetched
-            std::string path_no_ext = V.DIR_SHM +"online/";
-            path_no_ext += alphaNumericLower(S["Artist"] + S[V.ALBUM ? "Album" : "Title"]);
-            for (const std::string& x : {".jpg", ".png"}) {
-                if (fileExists(path_no_ext + x)) {
-                    V.COVERART = path_no_ext.substr(9) + x;
-                    break;
+    if (V.COVER) {
+        V.ALBUM  = hasData("Album");
+        V.ARTIST = hasData("Artist");
+        V.TITLE  = hasData("Title");
+        if (V.COVERART.empty()) {
+            std::string path_no_ext;
+            if (V.ARTIST && (V.ALBUM || V.TITLE)) { // get already fetched
+                std::string path_no_ext = DIR.SHM +"online/";
+                path_no_ext += alphaNumericLower(S["Artist"] + S[V.ALBUM ? "Album" : "Title"]);
+                for (const std::string& x : {".jpg", ".png"}) {
+                    if (fileExists(path_no_ext + x)) {
+                        V.COVERART = path_no_ext.substr(9) + x;
+                        break;
+                    }
                 }
+                if (V.COVERART.empty() && V.UPNP) coverartUpnp(path_no_ext);
             }
-            if (V.COVERART.empty() && V.UPNP) coverartUpnp(path_no_ext);
         }
     }
     if (V.ICON.empty() && V.PLAYER != "mpd") V.ICON = V.PLAYER;
@@ -407,18 +451,18 @@ int status() {
     S["state"]    = V.STATE;
     if (V.WEBRADIO) {
         S["station"]      = V.STATION;
-        S["stationcover"] = V.STATIONCOVER;
+        S["stationcover"] = V.COVER ? V.STATIONCOVER : "";
     }
-    if (V.SNAPCLIENT) S["snapserverip"] = fileContent(V.DIR_SHM +"snapserverip");
+    if (V.SNAPCLIENT) S["snapserverip"] = fileContent(DIR.SHM +"snapserverip");
     
-    B["btsender"]     = fileExists(V.DIR_SHM +"btmixer");
-    B["librandom"]    = fileExists(V.DIR_SYSTEM +"librandom");
-    B["relays"]       = fileExists(V.DIR_SYSTEM +"relays");
-    B["relayson"]     = fileExists(V.DIR_SHM +"relayson");
-    B["scrobble"]     = fileExists(V.DIR_SYSTEM +"scrobble");
+    B["btsender"]     = fileExists(DIR.SHM +"btmixer");
+    B["librandom"]    = fileExists(DIR.SYSTEM +"librandom");
+    B["relays"]       = fileExists(DIR.SYSTEM +"relays");
+    B["relayson"]     = fileExists(DIR.SHM +"relayson");
+    B["scrobble"]     = fileExists(DIR.SYSTEM +"scrobble");
     B["shareddata"]   = fileExists("/mnt/MPD/NAS/data/sharedip");
-    B["stoptimer"]    = fileExists(V.DIR_SHM +"pidstoptimer");
-    B["updateaddons"] = fileExists(V.DIR_DATA +"addons/update");
+    B["stoptimer"]    = fileExists(DIR.SHM +"pidstoptimer");
+    B["updateaddons"] = fileExists(DIR.DATA +"addons/update");
     B["stream"]       = V.STREAM;
     B["webradio"]     = V.WEBRADIO;
     
@@ -429,8 +473,8 @@ int status() {
     I["elapsed"]    = V.ELAPSED;
     I["Time"]       = V.TIME;
     I["volume"]     = V.VOLUME;
-    I["volumemute"] = std::stoi(fileContent(V.DIR_SYSTEM +"volumemute",  "0"));
-    I["volumemax"]  = std::stoi(fileContent(V.DIR_SYSTEM +"volumelimit", "-1"));
+    I["volumemute"] = std::stoi(fileContent(DIR.SYSTEM +"volumemute",  "0"));
+    I["volumemax"]  = std::stoi(fileContent(DIR.SYSTEM +"volumelimit", "-1"));
     
 ////////////////////////////////////////////////////////////////////////////////
     if (V.JSON && !V.SNAPCLIENT) { // page, counts, display
@@ -440,13 +484,13 @@ int status() {
         std::string display = "{\n";
         VECTOR = {"ap", "camilladsp", "dabradio", "equalizer", "loginsetting", "multiraudio", "relays", "snapclient"};
         for (const std::string& k : VECTOR) {
-            display += "  \""+ k +"\": "+ (fileExists(V.DIR_SYSTEM + k) ? "true" : "false") +",\n";
+            display += "  \""+ k +"\": "+ (fileExists(DIR.SYSTEM + k) ? "true" : "false") +",\n";
         }
         display += "  \"volumenone\": "+ std::string(V.VOLUMENONE ? "true" : "false") +",\n"+
-                    fileContent(V.DIR_SYSTEM +"display.json").substr(2); // "{\n" remove
+                    fileContent(DIR.SYSTEM +"display.json").substr(2); // "{\n" remove
         
         std::cout
-            << ", \"counts\"    : " << fileContent(V.DIR_DATA +"mpd/counts") << '\n'
+            << ", \"counts\"    : " << fileContent(DIR.DATA +"mpd/counts") << '\n'
             << ", \"display\"   : " << display << '\n';
     }
     
@@ -457,12 +501,14 @@ int status() {
     if (V.PLAY) statusFormat("timestamp", std::to_string(V.TIMESTAMP));
     if (V.JSON && !V.SNAPCLIENT) std::cout << "}\n";
 ////////////////////////////////////////////////////////////////////////////////
-    std::string file_play = V.DIR_SHM +"play";
+    std::string file_play = DIR.SHM +"play";
     if (V.PLAY) {
         std::ofstream(file_play);
     } else {
-        std::filesystem::remove(file_play);
+        fs::remove(file_play);
     }
+    
+    if (!V.COVER) return 0;
     
     if (V.COVERART.empty() && V.ARTIST && (V.ALBUM || V.TITLE)) { // online coverart (in background)
         std::string args = S["Artist"] +'\n';
