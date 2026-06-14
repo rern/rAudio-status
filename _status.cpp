@@ -349,12 +349,12 @@ int status() {
         }
     }
     
-    if (fileExists(DIR.SHM +"btmixer") && !fileExists(DIR.SYSTEM +"devicewithbt")) {
+    if (fs::exists(DIR.SHM +"btmixer") && !fs::exists(DIR.SYSTEM +"devicewithbt")) {
         V.CONTROL = fileContent(DIR.SHM +"btmixer");
         V.VOLUME  = getVolume("bluealsa", V.CONTROL);
     } else {
         V.CONTROL = fileContent(DIR.SHM +"amixercontrol");
-        if (V.CONTROL == "none" || fileExists(DIR.SHM +"nosound")) {
+        if (V.CONTROL == "none" || fs::exists(DIR.SHM +"nosound")) {
             V.VOLUMENONE = true;
         } else if (fileContains("mixertype=hardware", DIR.SHM +"output")) {
             V.VOLUME = getVolume("default", V.CONTROL);
@@ -396,7 +396,7 @@ int status() {
                 if (V.PLAY) {
                     if (V.ICON != "webradio") { // radiofrance / radioparadise
                         if (!V.STATION.empty()) V.EXT = V.STATION.substr(V.STATION.find(" - ") + 3);
-                        if (fileExists(DIR.SHM +"radio")) {
+                        if (fs::exists(DIR.SHM +"radio")) {
                             std::string status = fileContent(DIR.SHM +"status");
                             kv2var(status);
                         } else {
@@ -411,7 +411,7 @@ int status() {
             if (V.COVER) {
                 for (const std::string& x : {".jpg", ".png", ".gif"}) {
                     std::string f = DIR.DATA + dir_radio +"img/"+ url + x;
-                    if (fileExists(f)) {
+                    if (fs::exists(f)) {
                         V.STATIONCOVER = f.substr(9);
                         break;
                     }
@@ -454,7 +454,7 @@ int status() {
                 std::string path_no_ext = DIR.SHM +"online/";
                 path_no_ext += alphaNumericLower(S["Artist"] + S[V.ALBUM ? "Album" : "Title"]);
                 for (const std::string& x : {".jpg", ".png"}) {
-                    if (fileExists(path_no_ext + x)) {
+                    if (fs::exists(path_no_ext + x)) {
                         V.COVERART = path_no_ext.substr(9) + x;
                         break;
                     }
@@ -480,14 +480,14 @@ int status() {
     }
     if (V.SNAPCAST) S["snapserverip"] = fileContent(DIR.SHM +"snapserverip");
     
-    B["btsender"]     = fileExists(DIR.SHM +"btmixer");
-    B["librandom"]    = fileExists(DIR.SYSTEM +"librandom");
-    B["relays"]       = fileExists(DIR.SYSTEM +"relays");
-    B["relayson"]     = fileExists(DIR.SHM +"relayson");
-    B["scrobble"]     = fileExists(DIR.SYSTEM +"scrobble");
-    B["shareddata"]   = fileExists("/mnt/MPD/NAS/data/sharedip");
-    B["stoptimer"]    = fileExists(DIR.SHM +"pidstoptimer");
-    B["updateaddons"] = fileExists(DIR.DATA +"addons/update");
+    B["btsender"]     = fs::exists(DIR.SHM +"btmixer");
+    B["librandom"]    = fs::exists(DIR.SYSTEM +"librandom");
+    B["relays"]       = fs::exists(DIR.SYSTEM +"relays");
+    B["relayson"]     = fs::exists(DIR.SHM +"relayson");
+    B["scrobble"]     = fs::exists(DIR.SYSTEM +"scrobble");
+    B["shareddata"]   = fs::exists("/mnt/MPD/NAS/data/sharedip");
+    B["stoptimer"]    = fs::exists(DIR.SHM +"pidstoptimer");
+    B["updateaddons"] = fs::exists(DIR.DATA +"addons/update");
     B["webradio"]     = V.WEBRADIO;
     
     B["pause"]        = V.PAUSE;
@@ -501,7 +501,7 @@ int status() {
     
     bool volumelimit  = false;
     int volumemax     = 100;
-    if (fileExists(DIR.SYSTEM +"volumelimit")) {
+    if (fs::exists(DIR.SYSTEM +"volumelimit")) {
         VECTOR = fileContentLines(DIR.SYSTEM +"volumelimit.conf");
         for (const std::string& l : VECTOR) {
             if (l.find("max") == 0) {
@@ -522,7 +522,7 @@ int status() {
         std::string display = "{\n";
         VECTOR = {"ap", "camilladsp", "dabradio", "equalizer", "loginsetting", "multiraudio", "relays", "snapclient"};
         for (const std::string& k : VECTOR) {
-            display += "  \""+ k +"\": "+ (fileExists(DIR.SYSTEM + k) ? "true" : "false") +",\n";
+            display += "  \""+ k +"\": "+ (fs::exists(DIR.SYSTEM + k) ? "true" : "false") +",\n";
         }
         display += "  \"volumenone\": "+ std::string(V.VOLUMENONE ? "true" : "false") +",\n"+
                     fileContent(DIR.SYSTEM +"display.json").substr(2); // "{\n" remove
@@ -565,6 +565,9 @@ int main(int argc, char **argv) {
     if (argc == 1) return status();
     
     std::string ARGV1 = argv[1];
+    
+    if (ARGV1 == "-B") return wsBroadcast(argv[2]);
+    
     if (ARGV1 == "-C" || ARGV1 == "-L") {
         if (argc == 2) {
             std::cerr << "Error: Source file missing\n";
@@ -579,15 +582,19 @@ int main(int argc, char **argv) {
         std::cout << extractEmbedded(AD, AE, ARGV1 == "-C", file);
         return 0;
     }
+    
     if (ARGV1 == "-I") {
         std::cout << ipAddress() << '\n';
         return 0;
     }
+    
     if (ARGV1 == "-W" || ARGV1 == "-P") {
         std::string
             ip  = "127.0.0.1",
             msg = "ping";
-        if (argc > 2) {
+        if (argc == 3) {
+            msg = argv[2];
+        } else if (argc == 4) {
             char v0 = argv[2][0];
             if (v0 >= '0' && v0 <= '9') {ip  = argv[2]; if (argc > 3) msg = argv[3];}
             else                        {msg = argv[2]; if (argc > 3) ip  = argv[3];}
@@ -638,11 +645,12 @@ int main(int argc, char **argv) {
         << "  -L    extract lyrics to stdout\n"
         << "  -C    extract coverart to SOURCE_DIR/cover.jpg(png)\n\n"
         
-        << "Websocket: " << argv[0] << " [-W|-P] [IP] [MESSAGE]\n"
+        << "Websocket: " << argv[0] << " [-W|-P-B] [IP] [MESSAGE]\n"
         << "        default IP     : 127.0.0.1\n"
         << "        default MESSAGE: ping\n"
-        << "  -W    send - wait for reply\n"
-        << "  -P    push - exit immediately\n\n"
+        << "  -P    push - exit immediately\n"
+        << "  -B    broadcast\n"
+        << "  -W    send - wait for reply\n\n"
         
         << "  -I    system IP address\n";
     return 1;

@@ -150,10 +150,6 @@ std::vector<std::string> fileContentLines(const std::string& file) {
     return lines; // vector
 }
 
-bool fileExists(const std::string& file) {
-    return fs::exists(file);
-}
-
 int64_t epochMs() {
     return std::chrono::duration_cast<std::chrono::milliseconds>(
                 std::chrono::system_clock::now().time_since_epoch()
