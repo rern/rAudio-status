@@ -623,26 +623,27 @@ int main(int argc, char **argv) {
         return 0;
     }
     
-    std::cout
-        << "\nGet status and data for rAudio\n\n"
+    std::cerr
+        << "\nPlayback status of rAudio\n\n"
+        
         << "Usage: " << argv[0] << " [-o|-p|-b|-k]\n"
         << "        default: json format\n"
         << "          (with option: no counts and diaplay)\n"
         << "  -o    \n"
-        << "  -p    websocket push (local)\n" // normal     push on change
-        << "  -b    websocket broadcast\n"    // snapserver push on change
-        << "  -k    key=value format\n\n"     // snapserver data on snapclient refresh
+        << "  -p    websocket push      (normal push on change)\n"
+        << "  -b    websocket broadcast (snapserver push on change)\n"
+        << "  -k    key=value format    (snapserver data on client refresh)\n\n"
         
-        << "Embedded: " << argv[0] << " [-L|-C] <FILE>\n"
+        << "Embedded: " << argv[0] << " [-L|-C] <SOURCE_FILE>\n"
         << "  -L    extract lyrics to stdout\n"
-        << "  -C    extract coverart to cover.jpg/png\n"
-        << "          and save to directory of FILE\n\n"
+        << "  -C    extract coverart to SOURCE_DIR/cover.jpg(png)\nn"
         
-        << "Websocket: " << argv[0] << " [-W|-P] [IP] [MSG]\n"
+        << "Websocket: " << argv[0] << " [-W|-P] [IP] [MESSAGE]\n"
+        << "        default IP     : 127.0.0.1\n"
+        << "        default MESSAGE: ping\n"
         << "  -W    send - wait for reply\n"
-        << "  -P    push - exit immediately\n"
-        << "          IP default: 127.0.0.1 (localhost)\n\n"
+        << "  -P    push - exit immediately\n\n"
         
         << "  -I    system IP address\n";
-    return 0;
+    return 1;
 }
