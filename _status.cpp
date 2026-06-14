@@ -478,7 +478,7 @@ int status() {
         S["station"]      = V.STATION;
         S["stationcover"] = V.COVER ? V.STATIONCOVER : "";
     }
-    if (V.SNAPCLIENT) S["snapserverip"] = fileContent(DIR.SHM +"snapserverip");
+    if (V.SNAPCAST) S["snapserverip"] = fileContent(DIR.SHM +"snapserverip");
     
     B["btsender"]     = fileExists(DIR.SHM +"btmixer");
     B["librandom"]    = fileExists(DIR.SYSTEM +"librandom");
@@ -494,11 +494,25 @@ int status() {
     B["play"]         = V.PLAY;
     B["stop"]         = V.STOP;
     
-    I["elapsed"]    = V.ELAPSED;
-    I["Time"]       = V.TIME;
-    I["volume"]     = V.VOLUME;
-    I["volumemute"] = std::stoi(fileContent(DIR.SYSTEM +"volumemute",  "0"));
-    I["volumemax"]  = std::stoi(fileContent(DIR.SYSTEM +"volumelimit", "-1"));
+    I["elapsed"]      = V.ELAPSED;
+    I["Time"]         = V.TIME;
+    I["volume"]       = V.VOLUME;
+    I["volumemute"]   = std::stoi(fileContent(DIR.SYSTEM +"volumemute",  "0"));
+    
+    bool volumelimit  = false;
+    int volumemax     = 100;
+    if (fileExists(DIR.SYSTEM +"volumelimit")) {
+        VECTOR = fileContentLines(DIR.SYSTEM +"volumelimit.conf");
+        for (const std::string& l : VECTOR) {
+            if (l.find("max") == 0) {
+                volumemax   = std::stoi(l.substr(4));
+                volumelimit = volumemax < 100;
+                break;
+            }
+        }
+    }
+    B["volumelimit"]  = volumelimit;
+    I["volumemax"]    = volumemax;
     
 ////////////////////////////////////////////////////////////////////////////////
     if (V.JSON && !V.SNAPCLIENT) { // page, counts, display
@@ -615,9 +629,9 @@ int main(int argc, char **argv) {
         << "        default: json format\n"
         << "          (with option: no counts and diaplay)\n"
         << "  -o    \n"
-        << "  -p    websocket push localhost\n"
-        << "  -b    websocket broadcast\n"    // snapserver push on change
-        << "  -k    key=value format\n\n"         // snapserver reply on snapclient refresh
+        << "  -p    websocket push (localhost)\n"
+        << "  -b    websocket broadcast\n" // snapserver push on change
+        << "  -k    key=value format\n\n"  // snapserver reply on snapclient refresh
         
         << "Embedded: " << argv[0] << " [-L|-C] <FILE>\n"
         << "  -L    extract embedded lyrics to stdout\n"

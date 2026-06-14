@@ -121,7 +121,7 @@ bool fileContains(const std::string& sub, const std::string& file) {
     return false;
 }
 
-std::string fileContent(const std::string& file, const std::string& def = {}) {
+std::string fileContent(const std::string& file, const std::string& def = "") {
     std::ifstream f(file);
     if (!f) {
         if (def.empty()) std::cerr << "Error: fileContent - " << file << '\n';
