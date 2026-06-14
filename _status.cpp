@@ -625,22 +625,22 @@ int main(int argc, char **argv) {
     
     std::cout
         << "\nGet status and data for rAudio\n\n"
-        << "Usage: " << argv[0] << " [-k|-p|-b|-o]\n"
+        << "Usage: " << argv[0] << " [-o|-p|-b|-k]\n"
         << "        default: json format\n"
         << "          (with option: no counts and diaplay)\n"
         << "  -o    \n"
-        << "  -p    websocket push (localhost)\n"
-        << "  -b    websocket broadcast\n" // snapserver push on change
-        << "  -k    key=value format\n\n"  // snapserver reply on snapclient refresh
+        << "  -p    websocket push (local)\n" // normal     push on change
+        << "  -b    websocket broadcast\n"    // snapserver push on change
+        << "  -k    key=value format\n\n"     // snapserver data on snapclient refresh
         
         << "Embedded: " << argv[0] << " [-L|-C] <FILE>\n"
-        << "  -L    extract embedded lyrics to stdout\n"
-        << "  -C    extract embedded coverart to cover.jpg/png\n"
-        << "        and save to directory of FILE\n\n"
+        << "  -L    extract lyrics to stdout\n"
+        << "  -C    extract coverart to cover.jpg/png\n"
+        << "          and save to directory of FILE\n\n"
         
         << "Websocket: " << argv[0] << " [-W|-P] [IP] [MSG]\n"
-        << "  -W    websocket send - wait for reply\n"
-        << "  -P    websocket push - exit immediately\n"
+        << "  -W    send - wait for reply\n"
+        << "  -P    push - exit immediately\n"
         << "          IP default: 127.0.0.1 (localhost)\n\n"
         
         << "  -I    system IP address\n";
