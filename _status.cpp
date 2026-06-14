@@ -636,7 +636,7 @@ int main(int argc, char **argv) {
         
         << "Embedded: " << argv[0] << " [-L|-C] <SOURCE_FILE>\n"
         << "  -L    extract lyrics to stdout\n"
-        << "  -C    extract coverart to SOURCE_DIR/cover.jpg(png)\nn"
+        << "  -C    extract coverart to SOURCE_DIR/cover.jpg(png)\n\n"
         
         << "Websocket: " << argv[0] << " [-W|-P] [IP] [MESSAGE]\n"
         << "        default IP     : 127.0.0.1\n"
