@@ -1,5 +1,7 @@
 // g++ -O2 _status.cpp -o /srv/http/bash/status \
-    $( pkg-config --cflags --libs alsa,dbus-1,libcurl,libmpdclient,libupnpp,taglib )
+    $( pkg-config --cflags --libs alsa,dbus-1,libcurl,libmpdclient,libupnpp,taglib ) \
+    -static-libstdc++ -static-libgcc \
+    -Wno-psabi // needed by armv7h
 
 #include "_common.hpp"
 
