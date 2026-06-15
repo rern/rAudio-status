@@ -10,31 +10,46 @@
 
 namespace fs = std::filesystem;
 
-bool
-    CONSUME   = false; 
 int
-    PREV_ID   = 0,
-    UPDATE_ID = 0;
+    SONG_ID   = 0,
+    song_id   = 0,
+    SONG_POS  = 0,
+    song_pos  = 0,
+    UPDATE_ID = 0,
+    update_id = 0;
 std::string
     DIR_BASH  = "/srv/http/bash/",
     DIR_DATA  = "/srv/http/data/",
-    DIR_SHM   = DIR_DATA +"shm/",
-    PLAYER;
+    DIR_SHM   = DIR_DATA +"shm/";
 
 void runCommand(std::string command) {
     std::string cmd = DIR_BASH + command;
     std::system(cmd.c_str());
 }
 
-void mpdStatus(struct mpd_connection* conn, const std::string& type) {
+bool mpdStatus(struct mpd_connection* conn, const std::string& type) {
     struct mpd_status* status = mpd_run_status(conn);
-    if (status == nullptr) return;
     
-    if (type == "consume") CONSUME   = mpd_status_get_consume_state(status) == MPD_CONSUME_ON;
+    if (type == "changed") {
+        SONG_ID      = mpd_status_get_song_id(status);
+        SONG_POS     = mpd_status_get_song_pos(status);
+        bool changed = SONG_ID != song_id && SONG_POS != song_pos;
+        song_id      = SONG_ID;
+        song_pos     = SONG_POS;
+        return changed;
+    }
     
-    if (type == "update")  UPDATE_ID = mpd_status_get_update_id(status);
+    if (type == "consume") return mpd_status_get_consume_state(status) == MPD_CONSUME_ON;
+    
+    if (type == "update")  {
+        UPDATE_ID   = mpd_status_get_update_id(status);
+        bool update_done = UPDATE_ID == 0 && update_id > 0;
+        update_id   = UPDATE_ID;
+        return update_done;
+    }
     
     mpd_status_free(status);
+    return false;
 }
 
 void mpdIdleLoop(struct mpd_connection* conn) {
@@ -44,7 +59,7 @@ void mpdIdleLoop(struct mpd_connection* conn) {
 
     // Define the bitmask of subsystems we want to listen to
     const unsigned int interest_mask = MPD_IDLE_PLAYER 
-                                     | MPD_IDLE_PLAYLIST 
+                                     | MPD_IDLE_QUEUE 
                                      | MPD_IDLE_MIXER 
                                      | MPD_IDLE_UPDATE;
     
@@ -65,14 +80,13 @@ void mpdIdleLoop(struct mpd_connection* conn) {
             for (const std::string f : {"radio", "skip", "cdstart"}) {
                 if (fs::exists(DIR_SHM + f)) break;
                 
-                runCommand("status-push.sh");
+                if (mpdStatus(conn, "changed")) runCommand("status-push.sh");
             }
         }
         
-        if (events & MPD_IDLE_PLAYLIST) {
+        if (events & MPD_IDLE_QUEUE) {
             if (!fs::exists(DIR_SHM +"pushplaylist")) {
-                mpdStatus(conn, "consume");
-                if (CONSUME) runCommand("cmd.sh playlistpush");
+                if (mpdStatus(conn, "consume")) runCommand("cmd.sh playlistpush");
             }
         }
         
@@ -80,15 +94,13 @@ void mpdIdleLoop(struct mpd_connection* conn) {
             std::ifstream f(DIR_SHM +"player");
             std::string player;
             std::getline(f, player);
-            if (player == "upnp") runCommand("cmd.sh pushVolume");
+            if (player != "mpd") runCommand("cmd.sh pushVolume");
         }
         
         if (events & MPD_IDLE_UPDATE) {
-            mpdStatus(conn, "update");
-            if (UPDATE_ID == 0 && PREV_ID > 0) { // update done
-                if (!fs::exists(DIR_DATA +"/mpd/listing")) runCommand("cmd-list.sh");
+            if (!fs::exists(DIR_DATA +"/mpd/listing")) {
+                if (mpdStatus(conn, "update")) runCommand("cmd-list.sh");
             } 
-            PREV_ID = UPDATE_ID;
         }
     }
 }
@@ -111,6 +123,7 @@ int main() {
         mpdIdleLoop(conn);
     } catch (const std::exception& e) {
         std::cerr << "Exception: " << e.what() << "\n";
+        return 1;
     }
 
     mpd_connection_free(conn);
