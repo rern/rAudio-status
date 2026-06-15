@@ -78,12 +78,12 @@ void kv2var(const std::string& kv) {
                 else if (key == "Title")        S["Title"]     = value;
                 else if (key == "coverart")     V.COVERART     = value;
                 else if (key == "state")        V.STATE        = value;
-                else if (key == "elapsed")      V.ELAPSED      = std::stoi(value);
-                else if (key == "start")        V.START        = std::stoi(value);
-                else if (key == "Time")         V.TIME         = std::stoi(value);
                 else if (key == "sampling")     V.SAMPLING     = value;
                 else if (key == "station")      V.STATION      = value;
                 else if (key == "stationcover") V.STATIONCOVER = value;
+                else if (key == "elapsed")      V.ELAPSED      = std::stoi(value);
+                else if (key == "start")        V.START        = std::stoi(value);
+                else if (key == "Time")         V.TIME         = std::stoi(value);
                 
                 stateSet();
             }

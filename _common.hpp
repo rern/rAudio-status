@@ -163,7 +163,10 @@ int64_t epochS() {
 }
 
 void stateSet() {
-         if (V.STATE == "stop") {V.STOP = true;  V.PLAY = false; V.PAUSE = false;}
-    else if (V.STATE == "play") {V.STOP = false; V.PLAY = true;  V.PAUSE = false;}
-    else                        {V.STOP = false; V.PLAY = false; V.PAUSE = true;}
+    V.STOP  = false;
+    V.PLAY  = false;
+    V.PAUSE = false;
+         if (V.STATE == "stop") V.STOP  = true;
+    else if (V.STATE == "play") V.PLAY  = true;
+    else                        V.PAUSE = true;
 }
