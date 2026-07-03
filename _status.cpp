@@ -387,7 +387,9 @@ int status() {
             V.EXT      = "UPnP";
         } else {
             V.WEBRADIO = true;
-            if (V.URI.ends_with("#charset")) V.URI.resize(V.URI.length() - 8);
+            if (V.URI.size() >= 8 && V.URI.compare(V.URI.size() - 8, 8, "#charset") == 0) {
+                V.URI.resize(V.URI.length() - 8);
+            }
             std::string url = V.URI;
             std::string dir_radio;
             if (V.URI_INI == "rtsp") {
