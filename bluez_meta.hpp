@@ -265,10 +265,7 @@ bool get_media_transport_properties(DBusConnection* conn, const std::string& pla
 
                     CodecInfo result = decode_sampling_rate(config_bytes);
                     if (result.sample_rate > 0) {
-                        char buf[32];
-                        // "%.1f" performs the same formatting as "{:.1f}"
-                        snprintf(buf, sizeof(buf), "%.1f", result.sample_rate / 1000.0);
-                        V.SAMPLING = std::string(buf) + " kHz • " + result.codec_name;
+                        V.SAMPLING = std::format("{:.1f}", result.sample_rate / 1000.0) +" kHz • "+ result.codec_name;
                     }
                     
                     found_config = true;
