@@ -1,18 +1,16 @@
-// g++ -O2 _status.cpp -o /srv/http/bash/status \
+/* compile command:
+
+if [[ -e /boot/kernel7.img ]]; then  # armv7h
+    $opt=-Wno-psabi
+elif [[ -e /boot/kernel.img ]]; then # armv6h
+    $opt='-Wno-psabi -idirafter'
+fi
+
+g++ -O2 $opt _status.cpp -o /srv/http/bash/status \
     $( pkg-config --cflags --libs alsa dbus-1 libcurl libmpdclient libupnpp taglib ) \
     -static-libstdc++ -static-libgcc // include in binary
 
-// armv7h
-// g++ -O2 _status.cpp -o /srv/http/bash/status \
-    $( pkg-config --cflags --libs alsa dbus-1 libcurl libmpdclient libupnpp taglib ) \
-    -Wno-psabi
-
-// armv6h
-// fix: new gcc path
-//      ln -s /usr/lib/libatomic.so /usr/lib/libatomic_asneeded.so
-//      ln -s /usr/lib/libatomic.so.1 /usr/lib/libatomic_asneeded.so.1
-// g++ -O2 -idirafter /usr/include _status.cpp -o /srv/http/bash/status \
-    $(pkg-config --cflags --libs alsa dbus-1 libcurl libmpdclient libupnpp taglib)
+*/
 
 #include "_common.hpp"
 
