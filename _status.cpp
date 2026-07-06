@@ -1,9 +1,9 @@
 /* compile command:
 
 if [[ -e /boot/kernel7.img ]]; then  # armv7h
-    $opt=-Wno-psabi
+    opt=-Wno-psabi
 elif [[ -e /boot/kernel.img ]]; then # armv6h
-    $opt='-Wno-psabi -idirafter'
+    opt='-Wno-psabi -idirafter'
 fi
 
 g++ -O2 $opt _status.cpp -o /srv/http/bash/status \
