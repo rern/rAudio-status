@@ -1,10 +1,12 @@
 /* compile command:
 
 if [[ -e /boot/kernel7.img ]]; then  # armv7h
-    opt=-Wno-psabi
+    opt=-Wno-psabi                   
 elif [[ -e /boot/kernel.img ]]; then # armv6h - on upgraded sysroot
     opt='-Wno-psabi -idirafter /usr/include'
 fi
+
+// -Wno-psabi suppress warnings
 
 g++ -O2 $opt _status.cpp -o /srv/http/bash/status \
     $( pkg-config --cflags --libs alsa dbus-1 libcurl libmpdclient libupnpp taglib ) \
