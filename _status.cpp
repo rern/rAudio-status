@@ -2,8 +2,8 @@
 
 if [[ -e /boot/kernel7.img ]]; then  # armv7h
     opt=-Wno-psabi
-elif [[ -e /boot/kernel.img ]]; then # armv6h
-    opt='-Wno-psabi -idirafter'
+elif [[ -e /boot/kernel.img ]]; then # armv6h - on upgraded sysroot
+    opt='-Wno-psabi -idirafter /usr/include'
 fi
 
 g++ -O2 $opt _status.cpp -o /srv/http/bash/status \
