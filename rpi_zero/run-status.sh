@@ -1,4 +1,4 @@
-# sysroot upgrade
+### sysroot upgrade
 sed -i '/REPOSITORIES/,$ d' /etc/pacman.conf
 cat << EOF >> /etc/pacman.conf
 [+R]
@@ -18,23 +18,21 @@ SigLevel = Optional TrustAll
 Server = file:///home/x/GitHub/rern.github.io/armv6h/extra
 EOF
 
-pacman -Syy archlinuxarm-keyring firmware-raspberrypi \
-    linux-firmware linux-rpi raspberrypi-bootloader raspberrypi-utils \
+pacman -Syy coreutils curl cryptsetup gcc glibc gpgme kmod krb5 \
+    libarchive libssh2 libubsan mkinitcpio pacman openssl openssl-1.1 \
     --overwrite '*'
-reboot
-
-pacman -S filesystem gcc glibc --overwrite '*'
-pacman -Sdd cryptsetup gpgme pacman openssl openssl-1.1 --overwrite '*'
-pacman -S coreutils curl kmod krb5 libarchive libssh2 libubsan mkinitcpio --overwrite '*'
 
 # compiled 'status'
-g++ -O2 $ -idirafter /usr/include _status.cpp -o /srv/http/bash/status \
+g++ -O2 $opt _status.cpp -o status \
     $( pkg-config --cflags --libs alsa dbus-1 libcurl libmpdclient libupnpp taglib )
 
 # copy status to /srv/http/bash
+scp status root@192.168.1.90:/srv/http/bash
 
-# copy /lib/... to /opt/armv6-new/lib/
-libs="\
+### on rpi - install new libraries
+curl -sL https://github.com/rern/rAudio-status/raw/main/lib.tar.xz | bsdtar xpf - -C /
+
+list_libs="\
 ld-linux-armhf.so.3
 libc.so.6
 libdl.so.2
@@ -49,6 +47,7 @@ libstdc++.so.6
 libutil.so.1
 "
 
+# script to run status binary
 cat << EOF > /srv/http/bash/run-status.sh
 #!/bin/bash
 
