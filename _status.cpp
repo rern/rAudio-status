@@ -234,10 +234,10 @@ public:
         }
         
         B["updating"]  = mpd_status_get_update_id(status) > 0;
-        B["consume"]   = mpd_status_get_consume_state(status) == MPD_CONSUME_ON;
+        B["consume"]   = mpd_status_get_consume(status);
         B["random"]    = mpd_status_get_random(status);
         B["repeat"]    = mpd_status_get_repeat(status);
-        B["single"]    = mpd_status_get_single_state(status) == MPD_SINGLE_ON;
+        B["single"]    = mpd_status_get_single(status);
         I["crossfade"] = mpd_status_get_crossfade(status);
         
         I["pllength"]  = V.PLLENGTH;
