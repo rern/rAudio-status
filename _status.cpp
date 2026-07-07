@@ -1,11 +1,6 @@
 /* compile command:
 
-if [[ -e /boot/kernel7.img ]]; then  # armv7h
-    opt=-Wno-psabi                   
-elif [[ -e /boot/kernel.img ]]; then # armv6h - on upgraded sysroot
-    opt='-Wno-psabi -idirafter /usr/include'
-fi
-
+[[ -e /boot/kernel.img ]] && pt='-Wno-psabi -idirafter /usr/include' # armv6h - on upgraded sysroot
 // -Wno-psabi              - suppress warnings
 // -idirafter /usr/include - sysroot need this
 
