@@ -1,7 +1,11 @@
 /* compile command:
 
-# armv6h - on upgraded sysroot    no warnings, sysroot path
-[[ -e /boot/kernel.img ]] && pt='-Wno-psabi   -idirafter /usr/include'
+// armv6h - on upgraded sysroot
+[[ -e /boot/kernel.img ]] && opt='-Wno-psabi   -idirafter /usr/include'
+ 
+// -Wno-psabi              - no warnings
+// -idirafter /usr/include - sysroot path
+// -O2                     - strip
 
 g++ -O2 $opt _status.cpp -o status \
     $( pkg-config --cflags --libs alsa dbus-1 libcurl libmpdclient libupnpp taglib )
