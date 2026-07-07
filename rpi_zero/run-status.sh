@@ -23,14 +23,14 @@ pacman -Syy coreutils curl cryptsetup gcc glibc gpgme kmod krb5 \
     --overwrite '*'
 
 # compiled 'status'
-g++ -O2 $opt _status.cpp -o status \
+g++ -O2 $opt _status.cpp -o _status \
     $( pkg-config --cflags --libs alsa dbus-1 libcurl libmpdclient libupnpp taglib )
 
 # copy status to /srv/http/bash
-scp status root@192.168.1.90:/srv/http/bash
+scp _status root@192.168.1.90:/srv/http/bash
 
 ### on rpi - install new libraries
-curl -sL https://github.com/rern/rAudio-status/raw/main/lib.tar.xz | bsdtar xpf - -C /
+curl -sL https://github.com/rern/rAudio-status/raw/main/rpi_zero/lib.tar.xz | bsdtar xpf - -C /
 
 list_libs="\
 ld-linux-armhf.so.3
@@ -48,14 +48,14 @@ libutil.so.1
 "
 
 # script to run status binary
-cat << EOF > /srv/http/bash/run-status.sh
+cat << EOF > /srv/http/bash/status
 #!/bin/bash
 
 exec unshare --mount --propagation private bash -c '
   mkdir -p /tmp/mergedlib
   mount -t overlay overlay -o lowerdir=/opt/armv6-new/lib:/usr/lib,ro /tmp/mergedlib
   mount --bind /tmp/mergedlib /usr/lib
-  exec /srv/http/bash/status
+  exec /srv/http/bash/_status
 '
 EOF
-chmod +x /srv/http/bash/run-status.sh
+chmod +x /srv/http/bash/status
