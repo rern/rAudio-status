@@ -1,4 +1,12 @@
-### sysroot upgrade
+# Setup
+Run `status` binary on old `gcc`/`glibc` armv6h RPi.
+
+## on sysroot - upgrade
+No need if already upgraded.
+```sh
+[[ $( pacman -Q gcc ) != 'gcc 10.2.0-1' ]] && echo Already upgraded.
+```
+```sh
 sed -i '/REPOSITORIES/,$ d' /etc/pacman.conf
 cat << EOF >> /etc/pacman.conf
 [+R]
@@ -21,18 +29,36 @@ EOF
 pacman -Syy coreutils curl cryptsetup gcc glibc gpgme kmod krb5 \
     libarchive libssh2 libubsan mkinitcpio pacman openssl openssl-1.1 \
     --overwrite '*'
-
-# compiled 'status'
-g++ -O2 $opt _status.cpp -o _status \
+```
+## compiled 'status'
+```sh
+g++ -O2 $opt _status.cpp -o status \
     $( pkg-config --cflags --libs alsa dbus-1 libcurl libmpdclient libupnpp taglib )
 
 # copy status to /srv/http/bash
-scp _status root@192.168.1.90:/srv/http/bash
-
-### on rpi - install new libraries
+scp status root@192.168.1.90:/srv/http/bash/_status
+```
+## on rpi - install new libraries
+```sh
 curl -sL https://github.com/rern/rAudio-status/raw/main/rpi_zero/lib.tar.xz | bsdtar xpf - -C /
 
-list_libs="\
+# script to run status binary
+cat << EOF > /srv/http/bash/status
+#!/bin/bash
+
+exec unshare --mount --propagation private bash -c "
+  mkdir -p /tmp/mergedlib
+  mount -t overlay overlay -o lowerdir=/opt/armv6-new/lib:/usr/lib,ro /tmp/mergedlib
+  mount --bind /tmp/mergedlib /usr/lib
+  exec /srv/http/bash/_status $@
+"
+EOF
+chmod +x /srv/http/bash/status
+```
+libraries
+```sh
+ls /opt/armv6-new/lib
+
 ld-linux-armhf.so.3
 libc.so.6
 libdl.so.2
@@ -45,17 +71,4 @@ libresolv.so.2
 librt.so.1
 libstdc++.so.6
 libutil.so.1
-"
-
-# script to run status binary
-cat << EOF > /srv/http/bash/status
-#!/bin/bash
-
-exec unshare --mount --propagation private bash -c '
-  mkdir -p /tmp/mergedlib
-  mount -t overlay overlay -o lowerdir=/opt/armv6-new/lib:/usr/lib,ro /tmp/mergedlib
-  mount --bind /tmp/mergedlib /usr/lib
-  exec /srv/http/bash/_status
-'
-EOF
-chmod +x /srv/http/bash/status
+```
