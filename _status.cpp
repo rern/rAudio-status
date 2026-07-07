@@ -6,11 +6,11 @@ elif [[ -e /boot/kernel.img ]]; then # armv6h - on upgraded sysroot
     opt='-Wno-psabi -idirafter /usr/include'
 fi
 
-// -Wno-psabi suppress warnings
+// -Wno-psabi              - suppress warnings
+// -idirafter /usr/include - sysroot need this
 
-g++ -O2 $opt _status.cpp -o /srv/http/bash/status \
-    $( pkg-config --cflags --libs alsa dbus-1 libcurl libmpdclient libupnpp taglib ) \
-    -static-libstdc++ -static-libgcc // include in binary
+g++ -O2 $opt _status.cpp -o status \
+    $( pkg-config --cflags --libs alsa dbus-1 libcurl libmpdclient libupnpp taglib )
 
 */
 
