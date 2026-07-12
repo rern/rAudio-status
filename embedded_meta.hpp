@@ -580,12 +580,10 @@ std::string extractEmbedded(AudioData& AD, const AudioEmbedded& AE, const bool& 
     if (COVERART) {
         if (!AE.hasArt || AE.artSize == 0) return {};
         
-        size_t lastSlash = FILE_SOURCE.find_last_of("/\\");
-        std::string baseDir = (lastSlash != std::string::npos) ? FILE_SOURCE.substr(0, lastSlash) : ".";
-        std::string file_coverart = baseDir + "/cover";
-        file_coverart += (AE.mimeType.find("png") != std::string::npos) ? ".png" : ".jpg";
+        std::string ext           = AE.mimeType.find("png") != std::string::npos ? "png" : "jpg";
+        std::string file_embedded = "/data/shm/embedded/cover."+ ext;
         
-        std::ofstream file_out(file_coverart, std::ios::binary);
+        std::ofstream file_out("/srv/http"+ file_embedded, std::ios::binary);
         if (!file_out) return {};
 
         if (AE.artOffset == 0) { 
@@ -602,7 +600,7 @@ std::string extractEmbedded(AudioData& AD, const AudioEmbedded& AE, const bool& 
                     
                     if (payloadStart + AE.artSize <= decryptedRaw.size()) {
                         file_out.write(reinterpret_cast<const char*>(rawPtr + payloadStart), AE.artSize);
-                        return file_coverart;
+                        return file_embedded;
                     }
                 }
             }
@@ -612,7 +610,7 @@ std::string extractEmbedded(AudioData& AD, const AudioEmbedded& AE, const bool& 
             std::vector<char> buffer(AE.artSize);
             AD.file.read(buffer.data(), AE.artSize);
             file_out.write(buffer.data(), AE.artSize);
-            return file_coverart;
+            return file_embedded;
         }
     } else {
         if (!AE.hasLyrics || AE.lyricsText.empty()) return {};

@@ -25,6 +25,10 @@ g++ -O2 $opt _status.cpp -o status \
 #include "upnp_coverart.hpp"
 #include "websocket.hpp"
 
+bool hasData(const std::string& k) {
+    return S.find(k) != S.end() && !S[k].empty();
+}
+
 void fileCover(const std::string& file) {
     fs::path pathObj(file);
     std::string directory = pathObj.parent_path().string();
@@ -43,17 +47,50 @@ void fileCover(const std::string& file) {
         w = entry.path().stem().string(); // [name].ext
         if (names.count(w)) V.COVERART = entry.path().string();
     }
-    if (V.COVERART.empty()) {
-        AudioData AD = Utils::readFile(V.FILE.c_str(), false);
-        if (!AD.error) {
-            AudioEmbedded AE = getEmbeddedAudio(AD);
-            V.COVERART       = extractEmbedded(AD, AE, true, V.FILE);
-        }
+    if (!V.COVERART.empty()) return;
+    
+    std::string file_embedded = "/data/shm/embedded/cover."; // get already extracted
+    for (const std::string& ext : {"jpg", "png"}) {
+         if (fs::exists("/srv/http"+ file_embedded + ext)) {
+             V.COVERART = file_embedded + ext;
+             return;
+         }
     }
-}
-
-bool hasData(const std::string& k) {
-    return S.find(k) != S.end() && !S[k].empty();
+    
+    AudioData AD = Utils::readFile(file, true);
+    if (AD.error) return;
+    
+    AudioEmbedded AE = getEmbeddedAudio(AD);
+    V.COVERART       = extractEmbedded(AD, AE, true, file);
+    if (!V.COVERART.empty()) return;
+    
+    V.ALBUM  = hasData("Album");
+    V.ARTIST = hasData("Artist");
+    V.TITLE  = hasData("Title");
+    std::string path_no_ext;
+    if (V.ARTIST && (V.ALBUM || V.TITLE)) { // get already fetched
+        std::string path_no_ext = DIR.SHM +"online/";
+        path_no_ext += alphaNumericLower(S["Artist"] + S[V.ALBUM ? "Album" : "Title"]);
+        for (const std::string& x : {".jpg", ".png"}) {
+            if (fs::exists(path_no_ext + x)) {
+                V.COVERART = path_no_ext.substr(9) + x;
+                break;
+            }
+        }
+        if (V.COVERART.empty() && V.UPNP) coverartUpnp(path_no_ext);
+    }
+    if (!V.COVERART.empty()) return;
+    
+    if (V.ARTIST && (V.ALBUM || V.TITLE)) { // online coverart (in background)
+        std::string args = S["Artist"] +'\n';
+        if (V.ALBUM) {
+            args += S["Album"] +"\nCMD ARTIST ALBUM";
+        } else {
+            args += S["Title"] +"\nCMD ARTIST TITLE";
+        }
+        std::string cmd = "/srv/http/bash/status-coverartonline.sh \"cmd\n"+ args +"\" &> /dev/null &";
+        std::system(cmd.c_str());
+    }
 }
 
 bool inKey(const std::string& k, const std::vector<std::string>& vector) {
@@ -454,26 +491,6 @@ int status() {
     }
     V.SAMPLING += V.SAMPLING.empty() ? V.EXT : " • "+ V.EXT;
     if (V.PLLENGTH > 1) V.POSITION = std::to_string(V.POS + 1) +"/"+ std::to_string(V.PLLENGTH) +" • ";
-
-    if (V.COVER) {
-        V.ALBUM  = hasData("Album");
-        V.ARTIST = hasData("Artist");
-        V.TITLE  = hasData("Title");
-        if (V.COVERART.empty()) {
-            std::string path_no_ext;
-            if (V.ARTIST && (V.ALBUM || V.TITLE)) { // get already fetched
-                std::string path_no_ext = DIR.SHM +"online/";
-                path_no_ext += alphaNumericLower(S["Artist"] + S[V.ALBUM ? "Album" : "Title"]);
-                for (const std::string& x : {".jpg", ".png"}) {
-                    if (fs::exists(path_no_ext + x)) {
-                        V.COVERART = path_no_ext.substr(9) + x;
-                        break;
-                    }
-                }
-                if (V.COVERART.empty() && V.UPNP) coverartUpnp(path_no_ext);
-            }
-        }
-    }
     if (V.ICON.empty() && V.PLAYER != "mpd") V.ICON = V.PLAYER;
 
     S["control"]  = V.CONTROL;
@@ -556,19 +573,6 @@ int status() {
     } else {
         fs::remove(file_play);
     }
-
-    if (!V.COVER) return 0;
-
-    if (V.COVERART.empty() && V.ARTIST && (V.ALBUM || V.TITLE)) { // online coverart (in background)
-        std::string args = S["Artist"] +'\n';
-        if (V.ALBUM) {
-            args += S["Album"] +"\nCMD ARTIST ALBUM";
-        } else {
-            args += S["Title"] +"\nCMD ARTIST TITLE";
-        }
-        std::string cmd = "/srv/http/bash/status-coverartonline.sh \"cmd\n"+ args +"\" &> /dev/null &";
-        std::system(cmd.c_str());
-    }
     return 0;
 }
 
@@ -589,8 +593,8 @@ int main(int argc, char **argv) {
         fileCover(file);
         if (V.COVERART.empty()) return 1;
 
-        std::cout << V.COVERART.substr(9) << '\n';
-
+        std::cout << V.COVERART.substr(9);
+        return 0;
     }
 
     if (ARGV1 == "-I") {
@@ -651,16 +655,19 @@ int main(int argc, char **argv) {
         << "  -b    websocket broadcast (snapserver push on change)\n"
         << "  -k    key=value format    (snapserver data on client refresh)\n\n"
 
-        << "Embedded: " << argv[0] << " [-L|-C] <SOURCE_FILE>\n"
-        << "  -L    extract lyrics to stdout\n"
-        << "  -C    get coverart file or extract embedded to SOURCE_DIR/cover.jpg(png)\n\n"
-
         << "Websocket: " << argv[0] << " [-W|-P-B] [IP] [MESSAGE]\n"
         << "        default IP     : 127.0.0.1\n"
         << "        default MESSAGE: ping\n"
         << "  -P    push - exit immediately\n"
         << "  -B    broadcast\n"
         << "  -W    send - wait for reply\n\n"
+
+        << "Embedded: " << argv[0] << " [-L|-C] <SOURCE_FILE>\n"
+        << "  -L    extract lyrics to stdout\n"
+        << "  -C    get coverart\n"
+        << "        1. file     : {cover, album, folder, front} + ext: {jpg, png, gif}\n"
+        << "        2. embedded : extract to SOURCE_DIR/cover.jpg(png)\n"
+        << "        3. online   : /srv/http/bash/status-coverartonline.sh\n\n"
 
         << "  -I    system IP address\n";
     return 1;
