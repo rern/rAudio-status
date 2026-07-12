@@ -666,8 +666,8 @@ int main(int argc, char **argv) {
         << "  -L    extract lyrics to stdout\n"
         << "  -C    get coverart\n"
         << "        1. file     : {cover, album, folder, front} + ext: {jpg, png, gif}\n"
-        << "        2. embedded : extract to SOURCE_DIR/cover.jpg(png)\n"
-        << "        3. online   : /srv/http/bash/status-coverartonline.sh\n\n"
+        << "        2. embedded : extract to /data/shm/embedded/cover.jpg(png)\n"
+        << "        3. online   : status-coverartonline.sh\n\n"
 
         << "  -I    system IP address\n";
     return 1;
