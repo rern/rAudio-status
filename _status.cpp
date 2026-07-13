@@ -593,7 +593,7 @@ int main(int argc, char **argv) {
         fileCover(file);
         if (V.COVERART.empty()) return 1;
 
-        std::cout << V.COVERART.substr(9);
+        std::cout << V.COVERART;
         return 0;
     }
 
