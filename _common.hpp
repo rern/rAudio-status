@@ -141,6 +141,8 @@ std::string fileContent(const std::string& file, const std::string& def = "") {
 
 std::vector<std::string> fileContentLines(const std::string& file) {
     std::vector<std::string> lines;
+    if (!fs::exists(file)) return lines;
+
     std::ifstream f(file);
     if (!f) {
         std::cerr << "Error: fileContentLines - " << file << '\n';
