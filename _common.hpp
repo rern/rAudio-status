@@ -105,6 +105,8 @@ std::string alphaNumericLower(const std::string& str) {
 }
 
 bool fileContains(const std::string& sub, const std::string& file) {
+    if (!fs::exists(file)) return false;
+
     std::ifstream f(file);
     if (!f) {
         std::cerr << "Error: fileContains - " << file << '\n';
