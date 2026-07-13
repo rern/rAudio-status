@@ -36,18 +36,18 @@ struct Global {
         STREAM      = false,
         VOLUMENONE  = false,
         WEBRADIO    = false,
-        
+
         ALBUM       = false,
         ARTIST      = false,
         TITLE       = false,
-        
+
         AIRPLAY     = false,
         BLUETOOTH   = false,
         MPD         = false,
         SNAPCAST    = false,
         SPOTIFY     = false,
         UPNP        = false;
-        
+
     int
         BITDEPTH   = 0,
         BITRATE    = 0,
@@ -56,14 +56,14 @@ struct Global {
         POS        = 0,
         TIME       = 0,
         VOLUME     = 0;
-    
+
     int64_t
         START      = 0,
         TIMESTAMP  = 0;
-    
+
     uint32_t
         SAMPLERATE = 0;
-    
+
     std::string
         COVERART,
         CONTROL,
@@ -78,11 +78,11 @@ struct Global {
         URI,
         URI_INI,
         WS_STATUS,
-        
+
         DATA   = "/srv/http/data/",
         SHM    = DATA +"shm/",
         SYSTEM = DATA +"system/";
-        
+
     fs::path
         FILE;
 };
@@ -110,7 +110,7 @@ bool fileContains(const std::string& sub, const std::string& file) {
         std::cerr << "Error: fileContains - " << file << '\n';
         return false;
     }
-    
+
     std::string line;
     while (std::getline(f, line)) {
         if (line.find(sub) != std::string::npos) {
@@ -122,12 +122,14 @@ bool fileContains(const std::string& sub, const std::string& file) {
 }
 
 std::string fileContent(const std::string& file, const std::string& def = "") {
+    if (!fs::exists(file)) return def;
+
     std::ifstream f(file);
     if (!f) {
         if (def.empty()) std::cerr << "Error: fileContent - " << file << '\n';
         return def;
     }
-    
+
     std::stringstream buffer;
     buffer << f.rdbuf();
     std::string content = buffer.str();
