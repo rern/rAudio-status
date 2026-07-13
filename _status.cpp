@@ -2,7 +2,7 @@
 
 // armv6h - on upgraded sysroot
 [[ -e /boot/kernel.img ]] && opt='-Wno-psabi   -idirafter /usr/include'
- 
+
 // -Wno-psabi              - no warnings
 // -idirafter /usr/include - sysroot path
 // -O2                     - strip
@@ -62,7 +62,7 @@ bool inKey(const std::string& k, const std::vector<std::string>& vector) {
 
 void kv2var(const std::string& kv) {
     if (kv.empty()) return;
-    
+
     std::istringstream iss(kv);
     std::string line;
 
@@ -75,7 +75,7 @@ void kv2var(const std::string& kv) {
         if (std::getline(iss, key, '=')) {
             if (std::getline(iss, value)) {
                 if (value.empty()) continue;
-                
+
                 if (value.front() == '"' && value.back() == '"') { // strip 1st " and  " last quotes
                     value = value.substr(1, value.size() - 2);
                 }
@@ -95,7 +95,7 @@ void kv2var(const std::string& kv) {
                 else if (key == "elapsed")      V.ELAPSED      = std::stoi(value);
                 else if (key == "start")        V.START        = std::stoi(value);
                 else if (key == "Time")         V.TIME         = std::stoi(value);
-                
+
                 stateSet();
             }
         }
@@ -104,12 +104,12 @@ void kv2var(const std::string& kv) {
 void radioArtistTitle() {
     std::string title = S["Title"];
     if (title.empty()) return;
-    
+
     std::string split;
          if (title.find(" - ") != std::string::npos) split = " - ";
     else if (title.find(": ")  != std::string::npos) split = ": ";
     if (split.empty()) return;
-    
+
     size_t p    = title.find(split);
     S["Artist"] = title.substr(0, p);
     title       = title.substr(p + split.length());
@@ -122,12 +122,12 @@ void radioArtistTitle() {
 void statusFormat(const std::string& k, const std::string& v) {
     std::vector<std::string> key_BI = {"elapsed", "pllength", "song", "Time", "volume", "webradio"};
     if (!V.JSON && !inKey(k, key_BI)) return;
-    
+
     std::string kv;
     if (V.JSON) {
         kv = ", \""+ k +"\": "+ v;
         if (V.SNAPCLIENT) { V.WS_STATUS += kv; return; }
-        
+
     } else {
         kv = k +'='+ v;
     }
@@ -138,7 +138,7 @@ void statusFormatString(const std::string& k, std::string v) {
     std::vector<std::string> key_S = {"Album", "Artist", "Composer", "Conductor", "coverart", "file",
                                       "icon",  "player", "sampling", "station",   "state",    "Title"};
     if (!V.JSON && !inKey(k, key_S)) return;
-    
+
     if (v.find('\"') != std::string::npos) { // escape double quotes
         std::string value;
         value.reserve(std::string_view(v).size() * 1.1);
@@ -152,7 +152,7 @@ void statusFormatString(const std::string& k, std::string v) {
     if (V.JSON) {
         kv = ", \""+ k +"\": \""+ v +'"';
         if (V.SNAPCLIENT) { V.WS_STATUS += kv; return; }
-        
+
     } else if (v.find(' ') != std::string::npos) {
         kv = k +"=\""+ v +'"';
     } else {
@@ -167,7 +167,7 @@ void rendererStatus() {
         bluezMeta();
         return;
     }
-    
+
     std::string kv;
     if (V.SNAPCAST) {                // V.SNAPCLIENT js: REFRESHDATA() > PLAYBACK.get()
         std::string ip = fileContent(DIR.SHM +"snapserverip");
@@ -205,7 +205,7 @@ public:
     bool ok() {
         return conn && mpd_connection_get_error(conn) == MPD_ERROR_SUCCESS;
     }
-    
+
     void runStatus() {
         mpd_status *status = mpd_run_status(conn);
         if (status == nullptr) return;
@@ -217,11 +217,11 @@ public:
         }
         stateSet();
         if (V.PLAY) V.TIMESTAMP = epochMs();
-        
+
         V.TIME     = mpd_status_get_total_time(status);
         V.POS      = mpd_status_get_song_pos(status);
         V.PLLENGTH = mpd_status_get_queue_length(status);
-        
+
         if (!V.STOP) {
             const mpd_audio_format *audio = mpd_status_get_audio_format(status);
             if (audio != nullptr) {
@@ -230,23 +230,23 @@ public:
                 V.BITRATE    = mpd_status_get_kbit_rate(status);
             }
         }
-        
+
         B["updating"]  = mpd_status_get_update_id(status) > 0;
         B["consume"]   = mpd_status_get_consume(status);
         B["random"]    = mpd_status_get_random(status);
         B["repeat"]    = mpd_status_get_repeat(status);
         B["single"]    = mpd_status_get_single(status);
         I["crossfade"] = mpd_status_get_crossfade(status);
-        
+
         I["pllength"]  = V.PLLENGTH;
         I["song"]      = V.POS;
-        
+
         V.ELAPSED      = mpd_status_get_elapsed_time(status);
         V.VOLUME       = mpd_status_get_volume(status);
-        
+
         mpd_status_free(status);
     }
-    
+
     void runCurrentSong() {
         int i = 0;
         mpd_song* song = nullptr;
@@ -285,7 +285,7 @@ public:
             S.emplace(k, v ? v : "");
         }
         mpd_song_free(song);
-        
+
         if (S["Artist"].empty()) {
             if (S["AlbumArtist"].empty()) {
                 S["Artist"] = V.FILE.parent_path().filename().string();
@@ -294,7 +294,7 @@ public:
             }
         }
         if (S["Title"].empty()) S["Title"] = V.FILE.stem().string();
-        
+
         if (V.COVER) fileCover(V.FILE);
         if (V.STOP && !V.STREAM) {
             AudioData AD = Utils::readFile(V.FILE.c_str(), false);
@@ -315,7 +315,7 @@ int status() {
     else if (V.PLAYER == "snapcast")  V.SNAPCAST  = true;
     else if (V.PLAYER == "spotify")   V.SPOTIFY   = true;
     else if (V.PLAYER == "upnp")      V.UPNP      = true;
-            
+
     if (V.MPD || V.UPNP) {
         std::string dir_mpd = DIR.DATA +"mpd";
         struct statfs buf;
@@ -325,10 +325,10 @@ int status() {
                 std::cerr << "Shared Data server not found.\n";
                 return 1;
             }
-            
+
             std::system("systemctl start mpd");
         }
-        
+
         MPDclient MPD;
         if (!MPD.ok()) {
             std::cerr << "MPD connection failed\n";
@@ -345,7 +345,7 @@ int status() {
     } else {
         rendererStatus();
     }
-    
+
     std::ifstream file(DIR.SYSTEM +"display.json");
     if (!file) {
         std::cerr << "Error: display.json\n";
@@ -359,7 +359,7 @@ int status() {
             }
         }
     }
-    
+
     if (fs::exists(DIR.SHM +"btmixer") && !fs::exists(DIR.SYSTEM +"devicewithbt")) {
         V.CONTROL = fileContent(DIR.SHM +"btmixer");
         V.VOLUME  = getVolume("bluealsa", V.CONTROL);
@@ -371,7 +371,7 @@ int status() {
             V.VOLUME = getVolume("default", V.CONTROL);
         }
     }
-        
+
     if (V.URI_INI == "cdda") {
         V.EXT      = "CD";
         V.ICON     = "audiocd";
@@ -440,13 +440,13 @@ int status() {
             }
         }
     }
-    
+
     if (V.SAMPLERATE > 1000000) { // dsd
         uint32_t base = (V.SAMPLERATE % 48000 == 0) ? 48000 : 44100;
         V.SAMPLING = "DSD "+ std::to_string(V.SAMPLERATE / base) +" • "+
                      std::format("{:.2f}", V.SAMPLERATE / 1000000.0) +" MHz";
     }
-        
+
     if (V.SAMPLING.empty()) {
         if (V.BITDEPTH)   V.SAMPLING += std::to_string(V.BITDEPTH) +"bit ";
         if (V.SAMPLERATE) V.SAMPLING += std::format("{:.1f}", V.SAMPLERATE / 1000.0) +" kHz";
@@ -454,7 +454,7 @@ int status() {
     }
     V.SAMPLING += V.SAMPLING.empty() ? V.EXT : " • "+ V.EXT;
     if (V.PLLENGTH > 1) V.POSITION = std::to_string(V.POS + 1) +"/"+ std::to_string(V.PLLENGTH) +" • ";
-    
+
     if (V.COVER) {
         V.ALBUM  = hasData("Album");
         V.ARTIST = hasData("Artist");
@@ -490,7 +490,7 @@ int status() {
         S["stationcover"] = V.COVER ? V.STATIONCOVER : "";
     }
     if (V.SNAPCAST) S["snapserverip"] = fileContent(DIR.SHM +"snapserverip");
-    
+
     B["btsender"]     = fs::exists(DIR.SHM +"btmixer");
     B["librandom"]    = fs::exists(DIR.SYSTEM +"librandom");
     B["relays"]       = fs::exists(DIR.SYSTEM +"relays");
@@ -500,16 +500,16 @@ int status() {
     B["stoptimer"]    = fs::exists(DIR.SHM +"pidstoptimer");
     B["updateaddons"] = fs::exists(DIR.DATA +"addons/update");
     B["webradio"]     = V.WEBRADIO;
-    
+
     B["pause"]        = V.PAUSE;
     B["play"]         = V.PLAY;
     B["stop"]         = V.STOP;
-    
+
     I["elapsed"]      = V.ELAPSED;
     I["Time"]         = V.TIME;
     I["volume"]       = V.VOLUME;
     I["volumemute"]   = std::stoi(fileContent(DIR.SYSTEM +"volumemute",  "0"));
-    
+
     bool volumelimit  = false;
     int volumemax     = 100;
     if (fs::exists(DIR.SYSTEM +"volumelimit")) {
@@ -524,7 +524,7 @@ int status() {
     }
     B["volumelimit"]  = volumelimit;
     I["volumemax"]    = volumemax;
-    
+
 ////////////////////////////////////////////////////////////////////////////////
     if (V.JSON && !V.SNAPCLIENT) { // page, counts, display
         std::cout
@@ -537,16 +537,16 @@ int status() {
         }
         display += "  \"volumenone\": "+ std::string(V.VOLUMENONE ? "true" : "false") +",\n"+
                     fileContent(DIR.SYSTEM +"display.json").substr(2); // "{\n" remove
-        
+
         std::cout
             << ", \"counts\"    : " << fileContent(DIR.DATA +"mpd/counts") << '\n'
             << ", \"display\"   : " << display << '\n';
     }
-    
+
     for (const auto& [k, v] : S) statusFormatString(k, v);
     for (const auto& [k, v] : I) statusFormat(k, v >= 0 ? std::to_string(v) : "false");
     for (const auto& [k, v] : B) statusFormat(k, v ? "true" : V.JSON ? "false" : "");
-    
+
     if (V.PLAY) statusFormat("timestamp", std::to_string(V.TIMESTAMP));
     if (V.JSON && !V.SNAPCLIENT) std::cout << "}\n";
 ////////////////////////////////////////////////////////////////////////////////
@@ -556,9 +556,9 @@ int status() {
     } else {
         fs::remove(file_play);
     }
-    
+
     if (!V.COVER) return 0;
-    
+
     if (V.COVERART.empty() && V.ARTIST && (V.ALBUM || V.TITLE)) { // online coverart (in background)
         std::string args = S["Artist"] +'\n';
         if (V.ALBUM) {
@@ -574,31 +574,30 @@ int status() {
 
 int main(int argc, char **argv) {
     if (argc == 1) return status();
-    
+
     std::string ARGV1 = argv[1];
-    
+
     if (ARGV1 == "-B") return wsBroadcast(argv[2]);
-    
+
     if (ARGV1 == "-C" || ARGV1 == "-L") {
         if (argc == 2) {
             std::cerr << "Error: Source file missing\n";
             return 1;
         }
-        
+
         std::string file = argv[2];
-        AudioData AD = Utils::readFile(file, true);
-        if (AD.error) return 1;
-        
-        AudioEmbedded AE = getEmbeddedAudio(AD);
-        std::cout << extractEmbedded(AD, AE, ARGV1 == "-C", file);
-        return 0;
+        fileCover(file);
+        if (V.COVERART.empty()) return 1;
+
+        std::cout << V.COVERART.substr(9) << '\n';
+
     }
-    
+
     if (ARGV1 == "-I") {
         std::cout << ipAddress() << '\n';
         return 0;
     }
-    
+
     if (ARGV1 == "-W" || ARGV1 == "-P") {
         std::string
             ip  = "127.0.0.1",
@@ -611,39 +610,39 @@ int main(int argc, char **argv) {
             else                        {msg = argv[2]; if (argc > 3) ip  = argv[3];}
         }
         if (ARGV1 == "-P") return wsPush(ip, msg);
-        
+
         V.WS_STATUS = wsSend(ip, msg);
         if (V.WS_STATUS.empty()) return 1;
-        
+
         std::cout << V.WS_STATUS << '\n';
         return 0;
     }
-    
+
     if (ARGV1 == "-k") {
         V.JSON = false;
         return status();
     }
-    
+
     V.SNAPCLIENT = true; // status-push on track changed / ws on each client refresh
-    
+
     int ok_status = status();
     if (ok_status == 1) return 1;
-    
+
     V.WS_STATUS.erase(0, 1);
     V.WS_STATUS = "{\"channel\": \"mpdplayer\", \"data\": {"+ V.WS_STATUS +"}}";
-    
+
     if (ARGV1 == "-p") return wsPush("127.0.0.1", V.WS_STATUS);
-        
+
     if (ARGV1 == "-b") return wsBroadcast(V.WS_STATUS); // snapserver broadcast on change
-    
+
     if (ARGV1 == "-o") {
         std::cout << V.WS_STATUS << '\n';
         return 0;
     }
-    
+
     std::cerr
         << "\nPlayback status of rAudio\n\n"
-        
+
         << "Usage: " << argv[0] << " [-o|-p|-b|-k]\n"
         << "        default: json format\n"
         << "          (with option: no counts and diaplay)\n"
@@ -651,18 +650,18 @@ int main(int argc, char **argv) {
         << "  -p    websocket push      (normal push on change)\n"
         << "  -b    websocket broadcast (snapserver push on change)\n"
         << "  -k    key=value format    (snapserver data on client refresh)\n\n"
-        
+
         << "Embedded: " << argv[0] << " [-L|-C] <SOURCE_FILE>\n"
         << "  -L    extract lyrics to stdout\n"
-        << "  -C    extract coverart to SOURCE_DIR/cover.jpg(png)\n\n"
-        
+        << "  -C    get coverart file or extract embedded to SOURCE_DIR/cover.jpg(png)\n\n"
+
         << "Websocket: " << argv[0] << " [-W|-P-B] [IP] [MESSAGE]\n"
         << "        default IP     : 127.0.0.1\n"
         << "        default MESSAGE: ping\n"
         << "  -P    push - exit immediately\n"
         << "  -B    broadcast\n"
         << "  -W    send - wait for reply\n\n"
-        
+
         << "  -I    system IP address\n";
     return 1;
 }
