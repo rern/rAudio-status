@@ -1,16 +1,4 @@
-/* compile command:
-
-// armv6h - on upgraded sysroot
-[[ -e /boot/kernel.img ]] && opt='-Wno-psabi   -idirafter /usr/include'
-
-// -Wno-psabi              - no warnings
-// -idirafter /usr/include - sysroot path
-// -O2                     - strip
-
-g++ -O2 $opt _status.cpp -o status \
-    $( pkg-config --cflags --libs alsa dbus-1 libcurl libmpdclient libupnpp taglib )
-
-*/
+// compile script: ./compile.sh
 
 #include "_common.hpp"
 
@@ -657,7 +645,7 @@ int main(int argc, char **argv) {
         << "  -b    websocket broadcast (snapserver push on change)\n"
         << "  -k    key=value format    (snapserver data on client refresh)\n\n"
 
-        << "Websocket: " << argv[0] << " [-W|-P-B] [IP] [MESSAGE]\n"
+        << "Websocket: " << argv[0] << " [-W|-P|-B] [IP] [MESSAGE]\n"
         << "        default IP     : 127.0.0.1\n"
         << "        default MESSAGE: ping\n"
         << "  -P    push - exit immediately\n"

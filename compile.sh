@@ -1,19 +1,36 @@
 #!/bin/bash
 
-arch=$( uname -m )
-[[ $arch == armv6h ]] && opt='-Wno-psabi   -idirafter /usr/include'
+SECONDS=0
 
-# -Wno-psabi              - no warnings
-# -idirafter /usr/include - sysroot path
-# -O2                     - strip
+if [[ -e /boot/kernel8.img ]]; then
+	arch=aarch64
+elif [[ -e /boot/kernel7.img ]]; then
+	arch=armv7h
+else
+	arch=armv6h     #fix sysroot path
+	opt='-Wno-psabi -idirafter /usr/include'
+         #suppress warnings
+#                   - fix sysroot path
+fi
+
 cat << EOF
-g++ -O2 $opt _status.cpp -o status.$arch \
+g++ -O2 $opt _status.cpp -o status \
     $( pkg-config --cflags --libs alsa dbus-1 libcurl libmpdclient libupnpp taglib )
+...
 EOF
 
-g++ -O2 $opt _status.cpp -o status.$arch \
+    #strip
+g++ -O2 $opt _status.cpp -o status \
     $( pkg-config --cflags --libs alsa dbus-1 libcurl libmpdclient libupnpp taglib )
 
-mv /srv/http/bash/status{,.bak}
-cp status{,.$arch}
-cp status /srv/http/bash
+if [[ $arch == armv6h ]]; then
+	mv /srv/http/bash/_status{,.bak}
+	cp -f status /srv/http/bash/_status
+	cp -f status{,.$arch}
+else
+	mv /srv/http/bash/status{,.bak}
+	cp -f status /srv/http/bash
+	cp -f status{,.$arch}
+fi
+
+echo Compile duration: $SECONDS seconds
