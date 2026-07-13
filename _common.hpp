@@ -156,6 +156,17 @@ std::vector<std::string> fileContentLines(const std::string& file) {
     return lines; // vector
 }
 
+std::string fileEmbedded(const std::string& file) {
+    std::string filename;
+    if (S["Artist"].empty() || S["Album"].empty()) {
+        std::filesystem::path p = file;
+        filename                = p.filename().string();
+    } else {
+        filename                = S["Artist"] + S["Album"];
+    }
+    return "/data/shm/embedded/"+ alphaNumericLower(filename);
+}
+
 int64_t epochMs() {
     return std::chrono::duration_cast<std::chrono::milliseconds>(
                 std::chrono::system_clock::now().time_since_epoch()

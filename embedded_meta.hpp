@@ -576,13 +576,11 @@ AudioEmbedded embeddedWMA(AudioData& AD) {
 // ============================================================================
 // EXPORT PROCESSING MANAGER
 // ============================================================================
-std::string extractEmbedded(AudioData& AD, const AudioEmbedded& AE, const bool& COVERART, const std::string& FILE_SOURCE) {
+std::string extractEmbedded(AudioData& AD, const AudioEmbedded& AE, const bool& COVERART, const std::string& FILE_SOURCE, std::string& file_embedded) {
     if (COVERART) {
         if (!AE.hasArt || AE.artSize == 0) return {};
         
-        std::string ext           = AE.mimeType.find("png") != std::string::npos ? "png" : "jpg";
-        std::string file_embedded = "/data/shm/embedded/cover."+ ext;
-        
+        file_embedded += AE.mimeType.find("png") != std::string::npos ? ".png" : ".jpg";
         std::ofstream file_out("/srv/http"+ file_embedded, std::ios::binary);
         if (!file_out) return {};
 

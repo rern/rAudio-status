@@ -34,7 +34,7 @@ void fileCover(const std::string& file) {
     std::string directory = pathObj.parent_path().string();
     if (!fs::exists(directory)) return;
 
-    // Use static unordered_set so they are allocated only ONCE in memory
+    // static unordered_set - allocated only once in memory
     static const std::unordered_set<std::string> names = {"cover", "album", "folder", "front"};
     static const std::unordered_set<std::string> exts  = {".jpg", ".png", ".gif"};
     std::string w;
@@ -49,8 +49,8 @@ void fileCover(const std::string& file) {
     }
     if (!V.COVERART.empty()) return;
     
-    std::string file_embedded = "/data/shm/embedded/cover."; // get already extracted
-    for (const std::string& ext : {"jpg", "png"}) {
+    std::string file_embedded = fileEmbedded(file); // get already extracted
+    for (const std::string& ext : {".jpg", ".png"}) {
          if (fs::exists("/srv/http"+ file_embedded + ext)) {
              V.COVERART = file_embedded + ext;
              return;
@@ -61,7 +61,7 @@ void fileCover(const std::string& file) {
     if (AD.error) return;
     
     AudioEmbedded AE = getEmbeddedAudio(AD);
-    V.COVERART       = extractEmbedded(AD, AE, true, file);
+    V.COVERART       = extractEmbedded(AD, AE, true, file, file_embedded);
     if (!V.COVERART.empty()) return;
     
     V.ALBUM  = hasData("Album");
@@ -584,12 +584,14 @@ int main(int argc, char **argv) {
     if (ARGV1 == "-B") return wsBroadcast(argv[2]);
 
     if (ARGV1 == "-C" || ARGV1 == "-L") {
-        if (argc == 2) {
-            std::cerr << "Error: Source file missing\n";
+        if (argc < 5) {
+            std::cerr << "Error: Arguments missing - file artist album\n";
             return 1;
         }
 
         std::string file = argv[2];
+        S["Artist"]      = argv[3];
+        S["Album"]       = argv[4];
         fileCover(file);
         if (V.COVERART.empty()) return 1;
 
@@ -662,13 +664,13 @@ int main(int argc, char **argv) {
         << "  -B    broadcast\n"
         << "  -W    send - wait for reply\n\n"
 
-        << "Embedded: " << argv[0] << " [-L|-C] <SOURCE_FILE>\n"
-        << "  -L    extract lyrics to stdout\n"
-        << "  -C    get coverart\n"
+        << "Embedded coverart: " << argv[0] << " -C SOURCE_FILE ARTIST ALBUM\n"
         << "        1. file     : {cover, album, folder, front} + ext: {jpg, png, gif}\n"
         << "        2. embedded : extract to /data/shm/embedded/cover.jpg(png)\n"
         << "        3. online   : status-coverartonline.sh\n\n"
 
+        << "Embedded lyrics: " << argv[0] << " -L SOURCE_FILE\n\n"
+        
         << "  -I    system IP address\n";
     return 1;
 }
