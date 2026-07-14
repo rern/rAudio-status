@@ -36,7 +36,7 @@ void fileCover(const std::string& file) {
         if (names.count(w)) V.COVERART = entry.path().string();
     }
     if (!V.COVERART.empty()) return;
-    
+
     std::string file_embedded = fileEmbedded(file); // get already extracted
     for (const std::string& ext : {".jpg", ".png"}) {
          if (fs::exists("/srv/http"+ file_embedded + ext)) {
@@ -44,14 +44,14 @@ void fileCover(const std::string& file) {
              return;
          }
     }
-    
+
     AudioData AD = Utils::readFile(file, true);
     if (AD.error) return;
-    
+
     AudioEmbedded AE = getEmbeddedAudio(AD);
     V.COVERART       = extractEmbedded(AD, AE, true, file, file_embedded);
     if (!V.COVERART.empty()) return;
-    
+
     V.ALBUM  = hasData("Album");
     V.ARTIST = hasData("Artist");
     V.TITLE  = hasData("Title");
@@ -68,7 +68,7 @@ void fileCover(const std::string& file) {
         if (V.COVERART.empty() && V.UPNP) coverartUpnp(path_no_ext);
     }
     if (!V.COVERART.empty()) return;
-    
+
     if (V.ARTIST && (V.ALBUM || V.TITLE)) { // online coverart (in background)
         std::string args = S["Artist"] +'\n';
         if (V.ALBUM) {
@@ -475,7 +475,13 @@ int status() {
     if (V.SAMPLING.empty()) {
         if (V.BITDEPTH)   V.SAMPLING += std::to_string(V.BITDEPTH) +"bit ";
         if (V.SAMPLERATE) V.SAMPLING += std::format("{:.1f}", V.SAMPLERATE / 1000.0) +" kHz";
-        if (V.BITRATE)    V.SAMPLING += " "+ std::to_string(V.BITRATE) +" kHz";
+        if (V.BITRATE) {
+            if (V.BITRATE > 1000) {
+                V.SAMPLING += ' '+ std::format("{:.1f}", V.BITRATE / 1000.0) +" MHz/s";
+            } else {
+                V.SAMPLING += ' '+ std::to_string(V.BITRATE) +" kHz/s";
+            }
+        }
     }
     V.SAMPLING += V.SAMPLING.empty() ? V.EXT : " • "+ V.EXT;
     if (V.PLLENGTH > 1) V.POSITION = std::to_string(V.POS + 1) +"/"+ std::to_string(V.PLLENGTH) +" • ";
@@ -658,7 +664,7 @@ int main(int argc, char **argv) {
         << "        3. online   : status-coverartonline.sh\n\n"
 
         << "Embedded lyrics: " << argv[0] << " -L SOURCE_FILE\n\n"
-        
+
         << "  -I    system IP address\n";
     return 1;
 }

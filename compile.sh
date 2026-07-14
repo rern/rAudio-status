@@ -1,5 +1,7 @@
 #!/bin/bash
 
+[[ ! -e /usr/bin/pkg-config ]] && pacman -Sy --noconfirm pkgconfig
+
 SECONDS=0
 
 if [[ -e /boot/kernel8.img ]]; then
