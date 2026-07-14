@@ -277,17 +277,18 @@ AudioMeta parseDSF(AudioData& AD) {
 AudioMeta parseFLAC(AudioData& AD) {
     AudioMeta AM;
 
-    // Safety guard: The master "fLaC" marker (4 bytes) + STREAMINFO metadata block 
-    // requires checking properties up to absolute byte offset 27 (total 27 bytes minimal).
-    if (!AD.h || AD.size < 27) return AM;
+    // Safety guard: "fLaC" marker (4 bytes) + metadata block header (4 bytes) + enough
+    // of STREAMINFO to cover sample rate/channels/bit depth (bytes 18-21) => need >= 22 bytes.
+    if (!AD.h || AD.size < 22) return AM;
 
     // 1. Validate the mandatory "fLaC" ASCII stream marker
     if (std::memcmp(AD.h, "fLaC", 4) != 0) return AM;
 
-    // The STREAMINFO block always starts at byte offset 4.
-    // Bytes 10 to 13 (offset 14 to 17 relative to file start) handle Sample Rate and Bit Depth.
-    // To extract them cleanly, we read a 32-bit big-endian window covering absolute offsets 22 to 25.
-    uint32_t block = readUint32BE(AD.h + 22);
+    // STREAMINFO block starts at offset 8 (after the 4-byte marker and the 4-byte
+    // metadata block header). Within STREAMINFO: min block size (16b) @8, max block
+    // size (16b) @10, min frame size (24b) @12, max frame size (24b) @15, then
+    // sample rate/channels/bit depth packed starting @18.
+    uint32_t block = readUint32BE(AD.h + 18);
 
     // FLAC Bitfield Breakdown inside 'block':
     // - Sample Rate (20 bits): extracted from the upper 20 bits of this segment.

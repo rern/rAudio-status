@@ -48,6 +48,7 @@ enum class AF {
 struct AudioData {
     AF format;
     std::ifstream file;
+    std::vector<uint8_t> buffer; // owns the raw header bytes; AD.h points into this
     bool error  = true;
     uint8_t* h  = 0;
     size_t size = 0;
@@ -109,14 +110,14 @@ namespace Utils {
         if (!file) {
             std::cerr << "Error: AudioData readFile - " << FILE_SOURCE << '\n';
         } else {
-            std::vector<uint8_t> buf(4096);
-            file.read((char*)buf.data(), buf.size());
+            AD.buffer.resize(4096);
+            file.read((char*)AD.buffer.data(), AD.buffer.size());
             AD.size = file.gcount();
             if (AD.size < 16) {
                 std::cerr << "Error: AD.size < 16\n";
             } else {
                 AD.error = false;
-                AD.h = buf.data();
+                AD.h = AD.buffer.data(); // points into AD's own buffer, valid for AD's lifetime
                 AD.format = audioFormat(AD.h, AD.size);
                 if (return_file) AD.file = std::move(file); // for process file
             }
