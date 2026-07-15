@@ -1,3 +1,4 @@
+
 // compile script: ./compile.sh
 
 #include "_common.hpp"
@@ -12,6 +13,8 @@
 #include "ip_hostname.hpp"
 #include "upnp_coverart.hpp"
 #include "websocket.hpp"
+
+#define VERSION_STRING __TIME__ " " __DATE__
 
 bool hasData(const std::string& k) {
     return S.find(k) != S.end() && !S[k].empty();
@@ -577,6 +580,16 @@ int main(int argc, char **argv) {
 
     if (ARGV1 == "-B") return wsBroadcast(argv[2]);
 
+    if (ARGV1 == "-I") {
+        std::cout << ipAddress() << '\n';
+        return 0;
+    }
+
+    if (ARGV1 == "-v") {
+        std::cout << "Build: " << VERSION_STRING << '\n';
+        return 0;
+    }
+
     if (ARGV1 == "-C" || ARGV1 == "-L") {
         if (argc < 5) {
             std::cerr << "Error: Arguments missing - file artist album\n";
@@ -590,11 +603,6 @@ int main(int argc, char **argv) {
         if (V.COVERART.empty()) return 1;
 
         std::cout << V.COVERART;
-        return 0;
-    }
-
-    if (ARGV1 == "-I") {
-        std::cout << ipAddress() << '\n';
         return 0;
     }
 
@@ -649,7 +657,8 @@ int main(int argc, char **argv) {
         << "  -o    \n"
         << "  -p    websocket push      (normal push on change)\n"
         << "  -b    websocket broadcast (snapserver push on change)\n"
-        << "  -k    key=value format    (snapserver data on client refresh)\n\n"
+        << "  -k    key=value format    (snapserver data on client refresh)\n"
+        << "  -v    version\n\n"
 
         << "Websocket: " << argv[0] << " [-W|-P|-B] [IP] [MESSAGE]\n"
         << "        default IP     : 127.0.0.1\n"
