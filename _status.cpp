@@ -480,9 +480,9 @@ int status() {
         if (V.SAMPLERATE) V.SAMPLING += std::format("{:.1f}", V.SAMPLERATE / 1000.0) +" kHz";
         if (V.BITRATE) {
             if (V.BITRATE > 1000) {
-                V.SAMPLING += ' '+ std::format("{:.1f}", V.BITRATE / 1000.0) +" MHz/s";
+                V.SAMPLING += ' '+ std::format("{:.1f}", V.BITRATE / 1000.00) +" Mbit/s";
             } else {
-                V.SAMPLING += ' '+ std::to_string(V.BITRATE) +" kHz/s";
+                V.SAMPLING += ' '+ std::to_string(V.BITRATE) +" kbit/s";
             }
         }
     }
