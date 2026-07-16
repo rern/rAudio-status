@@ -9,6 +9,11 @@ if [[ -e /boot/kernel8.img ]]; then
 elif [[ -e /boot/kernel7.img ]]; then
 	arch=armv7h
 else
+	if grep -q system-container /proc/self/cgroup; then
+		echo 'Run sysroot with boot -b option'
+		exit
+#-------------------------------------------------------------------------------
+	fi
 	arch=armv6h     #fix sysroot path
 	opt='-Wno-psabi -idirafter /usr/include'
          #suppress warnings
