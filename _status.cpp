@@ -314,6 +314,10 @@ public:
         }
         mpd_song_free(song);
 
+        if (V.COVER) fileCover(V.FILE);
+
+        if (V.STREAM) return;
+
         if (S["Artist"].empty()) {
             if (S["AlbumArtist"].empty()) {
                 S["Artist"] = V.FILE.parent_path().filename().string();
@@ -321,10 +325,10 @@ public:
                 S["Artist"] = S["AlbumArtist"];
             }
         }
+
         if (S["Title"].empty()) S["Title"] = V.FILE.stem().string();
 
-        if (V.COVER) fileCover(V.FILE);
-        if (V.STOP && !V.STREAM) {
+        if (V.STOP) {
             AudioData AD = Utils::readFile(V.FILE.c_str(), false);
             if (!AD.error) {
                 AudioMeta AM = getSampling(AD);
