@@ -13,16 +13,13 @@ else
 	[[ -e /boot/kernel7.img ]] && arch=armv7h || arch=aarch64
 	file_bin=status
 fi
-
-cat << EOF
-g++ -O2 $opt _status.cpp -o $file_bin \
-    $( pkg-config --cflags --libs alsa dbus-1 libcurl libmpdclient libupnpp taglib )
+     #strip
+opt="-O2 $opt _status.cpp -o $file_bin $( pkg-config --cflags --libs alsa dbus-1 libcurl libmpdclient libupnpp taglib )"
+echo "
+g++ $opt
 ...
-EOF
-
-    #strip
-g++ -O2 $opt _status.cpp -o $file_bin \
-    $( pkg-config --cflags --libs alsa dbus-1 libcurl libmpdclient libupnpp taglib )
+"
+g++ $opt
 
 mv /srv/http/bash/$file_bin{,.bak}
 cp -f $file_bin /srv/http/bash
