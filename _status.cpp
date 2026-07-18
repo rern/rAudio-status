@@ -424,7 +424,7 @@ int status() {
                 V.EXT       = "DAB";
                 V.ICON      = "dabradio";
                 dir_radio = "dabradio/";
-                if (V.STOP) V.SAMPLING = "48 kHz";
+                if (V.STOP) V.SAMPLING = "16 bit 48 kHz 160 kbit/s • DAB";
             } else {
                 V.EXT       = "Radio";
                 dir_radio = "webradio/";
