@@ -481,16 +481,11 @@ int status() {
                     VECTOR = fileContentLines(file.path().string());
                     if (VECTOR.size()) {
                         V.STATION = VECTOR[0];
-                        if (V.EXT == "Radio") {
-                            if (VECTOR.size() > 1) {
-                                V.SAMPLING = VECTOR[1];
-                            } else {
-                                samplingString();
-                                if (V.ICON == "webradio") {
-                                    std::ofstream f(file.path());
-                                    if (f) f << V.STATION << '\n' << V.SAMPLING << '\n';
-                                }
-                            }
+                        if (VECTOR.size() > 1) V.SAMPLING = VECTOR[1];
+                        if (V.SAMPLING.empty() && V.PLAY) {
+                            samplingString();
+                            std::ofstream f(file.path());
+                            if (f) f << V.STATION << '\n' << V.SAMPLING << '\n';
                         }
                     }
                     break;
