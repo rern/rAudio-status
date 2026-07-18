@@ -147,6 +147,20 @@ void radioArtistTitle() {
     S["Title"]  = title;
 }
 
+void samplingString() {
+    if (!V.SAMPLING.empty()) return;
+    
+    if (V.BITDEPTH)   V.SAMPLING += std::to_string(V.BITDEPTH) +"bit ";
+    if (V.SAMPLERATE) V.SAMPLING += std::format("{:.1f}", V.SAMPLERATE / 1000.0) +" kHz";
+    if (V.BITRATE) {
+        if (V.BITRATE > 1000) {
+            V.SAMPLING += ' '+ std::format("{:.1f}", V.BITRATE / 1000.00) +" Mbit/s";
+        } else {
+            V.SAMPLING += ' '+ std::to_string(V.BITRATE) +" kbit/s";
+        }
+    }
+}
+
 void statusFormat(const std::string& k, const std::string& v) {
     std::vector<std::string> key_BI = {"elapsed", "pllength", "song", "Time", "volume", "webradio"};
     if (!V.JSON && !inKey(k, key_BI)) return;
@@ -202,15 +216,17 @@ void rendererStatus() {
         kv = wsSend(ip, "status"); // websocket server status -k > reply key=value
     } else {
         if (V.AIRPLAY) {
+            V.EXT = "AirPlay";
             std::string v;
             for (const std::string& k : {"Album", "Artist", "coverart", "elapsed", "start", "state", "Time", "Title"}) {
                 v = fileContent(DIR.SHM +"airplay/"+ k);
                 if (!v.empty()) kv += k +'='+ v +'\n';
             }
-            V.SAMPLING  = "16 bit 44.1 kHz 1.41 Mbit/s • AirPlay";
+            V.SAMPLING = "16 bit 44.1 kHz 1.41 Mbit/s";
         } else if (V.SPOTIFY) {
-            kv = fileContent(DIR.SHM +"spotify/status");
-            V.SAMPLING  = "48 kHz 320 kbit/s • Spotify";
+            V.EXT = "Spotify";
+            kv         = fileContent(DIR.SHM +"spotify/status");
+            V.SAMPLING = "48 kHz 320 kbit/s";
         }
         if (V.PLAY && V.ELAPSED) V.ELAPSED = epochS() - V.START + 1;
     }
@@ -421,13 +437,13 @@ int status() {
             std::string url = V.URI;
             std::string dir_radio;
             if (V.URI_INI == "rtsp") {
-                V.EXT       = "DAB";
-                V.ICON      = "dabradio";
-                dir_radio = "dabradio/";
-                if (V.STOP) V.SAMPLING = "16 bit 48 kHz 160 kbit/s • DAB";
+                V.EXT      = "DAB";
+                V.ICON     = "dabradio";
+                dir_radio  = "dabradio/";
+                V.SAMPLING = "16 bit 48 kHz 160 kbit/s";
             } else {
-                V.EXT       = "Radio";
-                dir_radio = "webradio/";
+                V.EXT      = "Radio";
+                dir_radio  = "webradio/";
                 std::replace(url.begin(), url.end(), '/', '|');
                 if (url.find("icecast.radiofrance.fr") != std::string::npos) {
                     V.ICON = "radiofrance";
@@ -460,12 +476,22 @@ int status() {
                     }
                 }
             }
-            for (const auto& entry : fs::recursive_directory_iterator(DIR.DATA + dir_radio)) {
-                if (entry.is_regular_file() && entry.path().filename() == url) {
-                    VECTOR = fileContentLines(entry.path().string());
+            for (const auto& file : fs::recursive_directory_iterator(DIR.DATA + dir_radio)) {
+                if (file.is_regular_file() && file.path().filename() == url) {
+                    VECTOR = fileContentLines(file.path().string());
                     if (VECTOR.size()) {
                         V.STATION = VECTOR[0];
-                        if (VECTOR.size() > 1) V.SAMPLING = VECTOR[1];
+                        if (V.EXT == "Radio") {
+                            if (VECTOR.size() > 1) {
+                                V.SAMPLING = VECTOR[1];
+                            } else {
+                                samplingString();
+                                if (V.ICON == "webradio") {
+                                    std::ofstream f(file.path());
+                                    if (f) f << V.STATION << '\n' << V.SAMPLING << '\n';
+                                }
+                            }
+                        }
                     }
                     break;
                 }
@@ -479,24 +505,13 @@ int status() {
                      std::format("{:.2f}", V.SAMPLERATE / 1000000.0) +" MHz";
     }
 
-    if (V.SAMPLING.empty()) {
-        if (V.BITDEPTH)   V.SAMPLING += std::to_string(V.BITDEPTH) +"bit ";
-        if (V.SAMPLERATE) V.SAMPLING += std::format("{:.1f}", V.SAMPLERATE / 1000.0) +" kHz";
-        if (V.BITRATE) {
-            if (V.BITRATE > 1000) {
-                V.SAMPLING += ' '+ std::format("{:.1f}", V.BITRATE / 1000.00) +" Mbit/s";
-            } else {
-                V.SAMPLING += ' '+ std::to_string(V.BITRATE) +" kbit/s";
-            }
-        }
-    }
-    V.SAMPLING += V.SAMPLING.empty() ? V.EXT : " • "+ V.EXT;
+    samplingString();
+    V.SAMPLING += ( V.SAMPLING.empty() ? "" : " • " ) + V.EXT;
     if (V.PLLENGTH > 1) V.POSITION = std::to_string(V.POS + 1) +"/"+ std::to_string(V.PLLENGTH) +" • ";
     if (V.ICON.empty() && V.PLAYER != "mpd") V.ICON = V.PLAYER;
 
     S["control"]  = V.CONTROL;
     S["coverart"] = V.COVERART;
-    S["ext"]      = V.EXT;
     S["icon"]     = V.ICON;
     S["file"]     = V.URI;
     S["player"]   = V.PLAYER;
