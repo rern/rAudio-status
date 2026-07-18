@@ -412,11 +412,11 @@ int status() {
         V.CONTROL = fileContent(DIR.SHM +"btmixer");
         V.VOLUME  = getVolume("bluealsa", V.CONTROL);
     } else {
-        V.CONTROL = fileContent(DIR.SHM +"amixercontrol");
-        if (V.CONTROL == "none" || fs::exists(DIR.SHM +"nosound")) {
+        if (fs::exists(DIR.SHM +"nosound") || fs::exists(DIR.SYSTEM +"mixernone")) {
             V.VOLUMENONE = true;
-        } else if (fileContains("mixertype=hardware", DIR.SHM +"output")) {
-            V.VOLUME = getVolume("default", V.CONTROL);
+        } else {
+            V.CONTROL = fileContent(DIR.SHM +"amixercontrol");
+            V.VOLUME  = getVolume("default", V.CONTROL);
         }
     }
 
