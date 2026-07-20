@@ -595,7 +595,9 @@ int main(int argc, char **argv) {
     if (ARGV1 == "-B") return wsBroadcast(argv[2]);
 
     if (ARGV1 == "-I") {
-        std::cout << ipAddress() << '\n';
+        std::string inf;
+        if (argc > 2) inf = argv[2];
+        std::cout << ipAddress(inf) << '\n';
         return 0;
     }
 
@@ -683,11 +685,14 @@ int main(int argc, char **argv) {
 
         << "Embedded coverart: " << argv[0] << " -C SOURCE_FILE ARTIST ALBUM\n"
         << "        1. file     : {cover, album, folder, front} + ext: {jpg, png, gif}\n"
-        << "        2. embedded : extract to /data/shm/embedded/cover.jpg(png)\n"
+        << "        2. embedded : extract to /data/shm/embedded/ARTIST_ALBUM.jpg(png)\n"
         << "        3. online   : status-coverartonline.sh\n\n"
 
         << "Embedded lyrics: " << argv[0] << " -L SOURCE_FILE\n\n"
 
-        << "  -I    system IP address\n";
+        << "IP address: " << argv[0] << " -I [e|w]\n"
+        << "        default: main\n"
+        << "  e     ethernet\n"
+        << "  w     wireless lan\n";
     return 1;
 }
