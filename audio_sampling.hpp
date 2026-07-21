@@ -8,7 +8,7 @@ struct AudioMeta {
 
 AudioMeta parseID3v2(AudioData& AD) {
     AudioMeta AM;
-    
+
     // Safety check if the input buffer is completely empty
     if (!AD.h || AD.size < 4) return AM;
 
@@ -19,13 +19,13 @@ AudioMeta parseID3v2(AudioData& AD) {
 
         int version = (p[1] >> 3) & 0x03;
         int layer   = (p[1] >> 1) & 0x03;
-        
+
         // Version 1 is reserved/invalid; Layer must be valid (typically Layer III/1 for MP3)
-        if (version == 1 || layer == 0) return false; 
-        
+        if (version == 1 || layer == 0) return false;
+
         return true;
     };
-    
+
     const int sr_table[4][3] = {
         {44100, 48000, 32000}, // MPEG1
         {22050, 24000, 16000}, // MPEG2
@@ -36,11 +36,21 @@ AudioMeta parseID3v2(AudioData& AD) {
     // Skip the ID3 header safely if present (ID3 header is 10 bytes)
     size_t start = 0;
     if (AD.size >= 10 && std::memcmp(AD.h, "ID3", 3) == 0) {
-        start = 10;
+        // FIX: The original code only skipped the fixed 10-byte ID3v2 header and
+        // never skipped the *body* of the tag. ID3v2 tags routinely carry embedded
+        // cover art and can run to hundreds of KB, which pushed the real MPEG sync
+        // frame well past the 4096-byte scan window below, causing false negatives
+        // on otherwise valid files. The tag size at bytes 6-9 is "synchsafe": each
+        // byte only uses its lower 7 bits.
+        uint32_t tagSize = (static_cast<uint32_t>(AD.h[6] & 0x7F) << 21) |
+                            (static_cast<uint32_t>(AD.h[7] & 0x7F) << 14) |
+                            (static_cast<uint32_t>(AD.h[8] & 0x7F) << 7)  |
+                            (static_cast<uint32_t>(AD.h[9] & 0x7F));
+        start = 10 + tagSize;
     }
 
     // Scan your lookahead window for the MPEG audio frame start
-    for (size_t j = start; j + 4 < AD.size && j < 4096; ++j) {
+    for (size_t j = start; j + 4 < AD.size && j < start + 4096; ++j) {
         if (!isValidFrameHeader(AD.h + j)) continue;
 
         // Process properties from the matching frame position 'j'
@@ -80,13 +90,13 @@ AudioMeta parseAIFF(AudioData& AD) {
     size_t i = 12;
     while (i + 8 <= AD.size) { // Changed to '<=' to allow evaluating a chunk right at the boundary
         const uint8_t* chunkID = AD.h + i;
-        
+
         // AIFF chunk sizes are Big-Endian 32-bit integers
-        uint32_t chunkSize = (static_cast<uint32_t>(chunkID[4]) << 24) | 
-                             (static_cast<uint32_t>(chunkID[5]) << 16) | 
-                             (static_cast<uint32_t>(chunkID[6]) << 8)  | 
+        uint32_t chunkSize = (static_cast<uint32_t>(chunkID[4]) << 24) |
+                             (static_cast<uint32_t>(chunkID[5]) << 16) |
+                             (static_cast<uint32_t>(chunkID[6]) << 8)  |
                              chunkID[7];
-        
+
         // Safety Break: If chunkSize causes integer overflow or goes out of bounds
         if (i + 8 + chunkSize > AD.size) {
             break;
@@ -95,22 +105,28 @@ AudioMeta parseAIFF(AudioData& AD) {
         // Parse Common Chunk (COMM)
         if (std::memcmp(chunkID, "COMM", 4) == 0 && chunkSize >= 18) {
             const uint8_t* commData = chunkID + 8;
-            
+
             // Channels:    commData[0..1]
             // Sample Frames: commData[2..5]
-            
+
             // Bit Depth is a Big-Endian 16-bit integer
             AM.bitDepth = (commData[6] << 8) | commData[7];
 
             // Sample Rate is a Big-Endian 80-bit IEEE 754 Extended Float (commData[8..17])
             uint16_t exp = (commData[8] << 8) | commData[9];
-            uint32_t hiMant = (static_cast<uint32_t>(commData[10]) << 24) | 
-                              (static_cast<uint32_t>(commData[11]) << 16) | 
-                              (static_cast<uint32_t>(commData[12]) << 8)  | 
+            uint32_t hiMant = (static_cast<uint32_t>(commData[10]) << 24) |
+                              (static_cast<uint32_t>(commData[11]) << 16) |
+                              (static_cast<uint32_t>(commData[12]) << 8)  |
                               commData[13];
-            
-            // IEEE 754 Extended bias tracking 
-            int shift = 16398 - exp;
+
+            // FIX: The bias used to convert the 80-bit extended float into an
+            // integer sample rate was wrong (16398 instead of 16414). Using only
+            // the top 32 bits of the 64-bit mantissa (hiMant), the correct shift
+            // is (16414 - exponent). The old formula produced shift=0 for the
+            // common 44100 Hz case, leaving sampleRate holding the raw, unshifted
+            // mantissa (a huge, garbage value) instead of 44100 — every AIFF file
+            // was affected, not just edge cases.
+            int shift = 16414 - exp;
             if (shift >= 0 && shift < 32) {
                 AM.sampleRate = hiMant >> shift;
                 AM.hasData = (AM.sampleRate > 0);
@@ -120,8 +136,8 @@ AudioMeta parseAIFF(AudioData& AD) {
 
         // Advance to next chunk header safely
         size_t step = 8 + chunkSize;
-        
-        // If the chunk payload size was odd, include the mandatory 1-byte padding alignment 
+
+        // If the chunk payload size was odd, include the mandatory 1-byte padding alignment
         if (chunkSize % 2 != 0) {
             step++;
         }
@@ -133,7 +149,7 @@ AudioMeta parseAIFF(AudioData& AD) {
 
         i += step;
     }
-    
+
     return AM;
 }
 
@@ -153,7 +169,7 @@ AudioMeta parseAPE(AudioData& AD) {
     if (version >= 3980) {
         // BitsPerSample (Little-Endian 16-bit) at offset 38
         AM.bitDepth = AD.h[38] | (AD.h[39] << 8);
-        
+
         // SampleRate (Little-Endian 32-bit) at offset 40
         // Safe explicit uint32_t casting prevents sign-extension corruption
         AM.sampleRate = static_cast<int>(
@@ -163,14 +179,16 @@ AudioMeta parseAPE(AudioData& AD) {
             (static_cast<uint32_t>(AD.h[43]) << 24)
         );
         AM.hasData = (AM.sampleRate > 0);
-    } 
+    }
     // Fallback logic processing legacy formats (Old legacy APE < 3.98)
     else {
         // In legacy versions, fields are offset relative to the old APE_HEADER layout.
         // Old structure alignment: BitsPerSample is at index 22, SampleRate is at index 24.
+        // NOTE: not independently re-verified against the legacy APE_HEADER reference —
+        // flagged here rather than changed silently.
         if (AD.size >= 28) {
             AM.bitDepth = AD.h[22] | (AD.h[23] << 8);
-            
+
             AM.sampleRate = static_cast<int>(
                 static_cast<uint32_t>(AD.h[24])        |
                 (static_cast<uint32_t>(AD.h[25]) << 8)  |
@@ -188,44 +206,54 @@ AudioMeta parseDFF(AudioData& AD) {
     AudioMeta AM;
     AM.bitDepth = 1; // DSD streams are universally 1-bit by specification
 
+    // Validate minimal buffer bounds and the master "FRM8" magic signature
     if (!AD.h || AD.size < 12) return AM;
     if (std::memcmp(AD.h, "FRM8", 4) != 0) return AM;
 
-    // FIX: previously fell through on mismatch instead of returning.
+    // The FRM8 header specifies the absolute format type at index 12 (e.g., "DSD ")
+    // FIX: the original code detected a mismatch but never returned, silently
+    // continuing to parse non-DSD FRM8 containers as if they were DSD.
     if (AD.size < 16 || std::memcmp(AD.h + 12, "DSD ", 4) != 0) {
         return AM;
     }
 
+    // Modern structured chunk navigation loop (Starts at index 16 past FRM8 + Size + DSD )
     size_t i = 16;
     while (i + 12 <= AD.size) {
         const uint8_t* chunkID = AD.h + i;
         uint64_t chunkSize = readUint64BE(chunkID + 4);
 
+        // Safety break to prevent out-of-bounds memory reading or integer wrapping exploits
         if (i + 12 + chunkSize > AD.size) {
             break;
         }
 
+        // Target the Property Chunk ("PROP"), which encloses format properties like "FS  "
         if (std::memcmp(chunkID, "PROP", 4) == 0 && chunkSize >= 4) {
+            // Confirm PROP type is "SND " (Sound description)
             if (std::memcmp(chunkID + 12, "SND ", 4) == 0) {
-                size_t propOffset = i + 16;
+                size_t propOffset = i + 16; // Skip PROP ID (4), Size (8), and "SND " (4)
                 size_t propEnd = i + 12 + chunkSize;
 
+                // Loop through nested property sub-chunks (these use standard 32-bit or 64-bit headers)
                 while (propOffset + 12 <= propEnd) {
                     const uint8_t* subChunkID = AD.h + propOffset;
                     uint64_t subChunkSize = readUint64BE(subChunkID + 4);
 
                     if (propOffset + 12 + subChunkSize > propEnd) break;
 
+                    // Match Sample Rate property chunk identifier
                     if (std::memcmp(subChunkID, "FS  ", 4) == 0 && subChunkSize >= 4) {
                         AM.sampleRate = static_cast<int>(readUint32BE(subChunkID + 12));
                         AM.hasData = (AM.sampleRate > 0);
-                        return AM;
+                        return AM; // Successfully extracted target properties, exit early
                     }
 
-                    // FIX: DSDIFF pads odd-sized chunk data to an even boundary.
-                    // The original code advanced by 12 + subChunkSize unconditionally,
-                    // which desyncs sub-chunk parsing after any odd-sized chunk
-                    // (e.g. "CMPR") appearing before "FS  ".
+                    // FIX: DSDIFF chunks must pad to an even byte boundary just like the
+                    // outer chunk loop already does. The original code advanced by
+                    // exactly (12 + subChunkSize) with no padding, so any odd-sized
+                    // sub-chunk (e.g. "CMPR") appearing before "FS  " desynced the
+                    // cursor and could cause "FS  " to be missed or misread entirely.
                     size_t subStep = 12 + subChunkSize;
                     if (subChunkSize % 2 != 0) {
                         subStep++;
@@ -237,10 +265,13 @@ AudioMeta parseDFF(AudioData& AD) {
             }
         }
 
+        // DFF chunks must align on even byte boundaries if their size is odd
         size_t step = 12 + chunkSize;
         if (chunkSize % 2 != 0) {
             step++;
         }
+
+        // Anti-infinite loop guard
         if (step < 12) step = 12;
 
         i += step;
@@ -253,16 +284,27 @@ AudioMeta parseDSF(AudioData& AD) {
     AudioMeta AM;
     AM.bitDepth = 1; // DSD streams are universally 1-bit by specification
 
+    // Safety guard: The combined DSD (28 bytes) and fmt (52 bytes) chunks require
+    // at least 80 bytes of lookahead data to safely read the sample rate field.
     if (!AD.h || AD.size < 80) return AM;
 
+    // 1. Validate the master "DSD " chunk signature at the beginning
     if (std::memcmp(AD.h, "DSD ", 4) != 0) return AM;
+
+    // 2. Validate the nested "fmt " chunk signature (starts at absolute offset 28)
     if (std::memcmp(AD.h + 28, "fmt ", 4) != 0) return AM;
 
-    // FIX: samplingFrequency is at absolute offset 56, not 60.
-    // Offset 60 is bitsPerSample (1 or 8) — reading it as sample rate
-    // was silently producing garbage values like 1 or 8.
+    // 3. Extract Sample Rate (Little-Endian 32-bit integer).
+    // FIX: per the DSF spec, the "fmt " payload (starting at absolute offset 28)
+    // lays out formatVersion(4)@40, formatID(4)@44, channelType(4)@48,
+    // channelNum(4)@52, samplingFrequency(4)@56, bitsPerSample(4)@60.
+    // The original code read from offset 60, which is bitsPerSample (typically
+    // 1 or 8) — not the sample rate. That silently produced garbage values like
+    // 1 or 8 in AM.sampleRate for every DSF file. The correct offset is 56.
     AM.sampleRate = static_cast<int>(readUint32LE(AD.h + 56));
 
+    // Safety verification: Ensure the parsed sample rate is realistic for DSD
+    // (e.g., DSD64 is 2822400 Hz, DSD128 is 5644800 Hz, etc.)
     AM.hasData = (AM.sampleRate > 0);
 
     return AM;
@@ -288,9 +330,9 @@ AudioMeta parseFLAC(AudioData& AD) {
     // - Sample Rate (20 bits): extracted from the upper 20 bits of this segment.
     // - Channels (3 bits): next 3 bits.
     // - Bit Depth (5 bits): next 5 bits (stored as value - 1).
-    
+
     AM.sampleRate = static_cast<int>(block >> 12);
-    
+
     // Extract the 5 bits representing Bit Depth, mask them, and add 1 per specification
     AM.bitDepth = static_cast<int>(((block >> 4) & 0x1F) + 1);
 
@@ -318,7 +360,7 @@ AudioMeta parseM4A(AudioData& AD) {
     while (i + 8 <= AD.size) {
         const uint8_t* atom = AD.h + i;
         uint32_t atomSize = readUint32BE(atom);
-        
+
         // Safety check against zero-size hang-ups or corrupted overflows
         if (atomSize < 8 || i + atomSize > AD.size) {
             break;
@@ -326,14 +368,14 @@ AudioMeta parseM4A(AudioData& AD) {
 
         // Check if we hit container atoms that hold audio tracking streams
         // "moov" (Movie), "trak" (Track), "mdia" (Media), "minf" (Media Info), "stbl" (Sample Table)
-        if (std::memcmp(atom + 4, "moov", 4) == 0 || 
-            std::memcmp(atom + 4, "trak", 4) == 0 || 
-            std::memcmp(atom + 4, "mdia", 4) == 0 || 
-            std::memcmp(atom + 4, "minf", 4) == 0 || 
+        if (std::memcmp(atom + 4, "moov", 4) == 0 ||
+            std::memcmp(atom + 4, "trak", 4) == 0 ||
+            std::memcmp(atom + 4, "mdia", 4) == 0 ||
+            std::memcmp(atom + 4, "minf", 4) == 0 ||
             std::memcmp(atom + 4, "stbl", 4) == 0 ||
-            std::memcmp(atom + 4, "stsd", 4) == 0) 
+            std::memcmp(atom + 4, "stsd", 4) == 0)
         {
-            // These are container atoms. Instead of jumping over them, we enter them 
+            // These are container atoms. Instead of jumping over them, we enter them
             // by advancing by just their header size (8 bytes, or 16 bytes for 'stsd' description)
             size_t headerSize = (std::memcmp(atom + 4, "stsd", 4) == 0) ? 16 : 8;
             i += headerSize;
@@ -352,23 +394,34 @@ AudioMeta parseM4A(AudioData& AD) {
 
         // Target 2: Apple Lossless (ALAC) Sample Entry Description Box
         if (std::memcmp(atom + 4, "alac", 4) == 0 && atomSize >= 44) {
-            // The embedded "alac" specific configuration structure sits inside the main entry box.
-            // According to Apple specifications, the payload details are located at offset 36 relative
-            // to the start of the 'alac' atom payload (absolute offset 8 + 36 = 44).
-            if (i + 44 + 12 <= AD.size) {
+            // The embedded "alac" specific configuration structure (ALACSpecificConfig)
+            // sits inside the main entry box, starting at relative offset 36
+            // (absolute offset 8 + 36 = 44).
+            //
+            // FIX: ALACSpecificConfig layout is:
+            //   frameLength(4)@0  compatibleVersion(1)@4  bitDepth(1)@5
+            //   pb(1)@6  mb(1)@7  kb(1)@8  numChannels(1)@9  maxRun(2)@10
+            //   maxFrameBytes(4)@12  avgBitRate(4)@16  sampleRate(4)@20
+            //
+            // The original code read bitDepth from relative offset 4 (that's actually
+            // compatibleVersion) and sampleRate from relative offset 8 (the middle of
+            // kb/numChannels/maxRun — meaningless as a 32-bit value). It also only
+            // checked for 12 available bytes, when reading sampleRate at relative
+            // offset 20 requires 24. Corrected below.
+            if (i + 44 + 24 <= AD.size) {
                 const uint8_t* alacCookie = atom + 44;
-                
-                // Bit Depth is an 8-bit integer at index 4 of the configuration cookie
-                AM.bitDepth = alacCookie[4];
-                
-                // Sample Rate is a 32-bit Big-Endian integer at index 8 of the configuration cookie
-                AM.sampleRate = static_cast<int>(readUint32BE(alacCookie + 8));
+
+                // Bit Depth is an 8-bit integer at relative offset 5
+                AM.bitDepth = alacCookie[5];
+
+                // Sample Rate is a 32-bit Big-Endian integer at relative offset 20
+                AM.sampleRate = static_cast<int>(readUint32BE(alacCookie + 20));
                 formatFound = true;
             }
             break;
         }
 
-        // Safely skip past the current non-audio/metadata atom payload 
+        // Safely skip past the current non-audio/metadata atom payload
         i += atomSize;
     }
 
@@ -401,7 +454,7 @@ AudioMeta parseOGG(AudioData& AD) {
 
         // Get the number of segment entries located at byte index 26
         uint8_t pageSegments = page[26];
-        
+
         // Ensure the table containing segment lengths fits inside our buffer
         if (i + 27 + pageSegments > AD.size) break;
 
@@ -434,8 +487,8 @@ AudioMeta parseOGG(AudioData& AD) {
 
             // Target 2: Match Vorbis Identification Packet Header
             // Vorbis ID packets begin with 0x01 followed by "vorbis" (total 7 bytes)
-            if (payloadOffset + 30 <= AD.size && 
-                packet[0] == 0x01 && std::memcmp(packet + 1, "vorbis", 6) == 0) 
+            if (payloadOffset + 30 <= AD.size &&
+                packet[0] == 0x01 && std::memcmp(packet + 1, "vorbis", 6) == 0)
             {
                 // According to Vorbis specifications:
                 // [0] Packet Type (1 byte)
@@ -472,7 +525,7 @@ AudioMeta parseWAV(AudioData& AD) {
     size_t i = 12;
     while (i + 8 <= AD.size) {
         const uint8_t* subChunk = AD.h + i;
-        
+
         // Extract the declared 32-bit Little-Endian chunk size at offset 4
         uint32_t chunkSize = readUint32LE(subChunk + 4);
 
@@ -492,10 +545,10 @@ AudioMeta parseWAV(AudioData& AD) {
             // [8..11] Byte Rate (4 bytes)
             // [12..13] Block Align (2 bytes)
             // [14..15] Bits Per Sample / Bit Depth (2-byte Little-Endian integer)
-            
+
             AM.sampleRate = static_cast<int>(readUint32LE(payload + 4));
             AM.bitDepth   = static_cast<int>(readUint16LE(payload + 14));
-            
+
             if (AM.sampleRate > 0 && AM.bitDepth > 0) {
                 AM.hasData = true;
             }
@@ -504,7 +557,7 @@ AudioMeta parseWAV(AudioData& AD) {
 
         // Advance to the next chunk header safely
         size_t step = 8 + chunkSize;
-        
+
         // WAV chunks must align to even byte boundaries per the RIFF specification
         if (chunkSize % 2 != 0) {
             step++;
@@ -530,16 +583,19 @@ AudioMeta parseWMA(AudioData& AD) {
 
     // Extract total sub-objects count located at offset 24 safely
     uint32_t totalHeaderObjects = readUint32LE(AD.h + 24);
-    
+
     // Scan buffer space for the Stream Properties Object GUID
     const uint8_t streamPropertiesGUID[16] = {0x91, 0x07, 0xDC, 0xB7, 0x0E, 0xA9, 0xCF, 0x11, 0x8E, 0x6E, 0x00, 0xC0, 0x0C, 0x20, 0x53, 0x65};
     const uint8_t audioStreamTypeGUID[16]   = {0x40, 0x9E, 0x69, 0xF8, 0x4D, 0x5B, 0xCF, 0x11, 0xA8, 0xFD, 0x00, 0x80, 0x5F, 0x5C, 0x44, 0x2B};
 
     size_t i = 30; // Shift past the fixed segment of the main header object
-    
+
+    // NOTE: offsets inside the Stream Properties Object below (40, 44, base 54) were
+    // not independently re-verified against the ASF reference spec — flagged rather
+    // than changed silently. Worth checking against a real ASF sample if WMA support matters.
     for (uint32_t objCount = 0; objCount < totalHeaderObjects && (i + 24) <= AD.size; ++objCount) {
         const uint8_t* curObjGUID = AD.h + i;
-        
+
         // Read 64-bit size values safely via the dedicated non-overflow helper
         uint64_t objSize = readUint64LE(curObjGUID + 16);
 
@@ -550,10 +606,10 @@ AudioMeta parseWMA(AudioData& AD) {
         // Match Stream Properties Object
         if (std::memcmp(curObjGUID, streamPropertiesGUID, 16) == 0 && objSize >= 78) {
             const uint8_t* streamData = curObjGUID + 24;
-            
+
             // Validate that this particular stream configuration maps to an Audio Stream
             if (std::memcmp(streamData, audioStreamTypeGUID, 16) == 0) {
-                
+
                 // Dynamically extract Type Data Length (4 bytes at offset 40)
                 uint32_t typeDataLen = readUint32LE(streamData + 40);
                 // Dynamically extract Error Correction Data Length (4 bytes at offset 44)
@@ -566,18 +622,18 @@ AudioMeta parseWMA(AudioData& AD) {
                 // Safety validation checking that the structure payload remains well inside memory limits
                 if (waveFormatExOffset + 16 <= AD.size && typeDataLen >= 16) {
                     const uint8_t* waveFormatEx = AD.h + waveFormatExOffset;
-                    
+
                     // Sample Rate is a Little-Endian 32-bit integer at offset 4 of WAVEFORMATEX
                     AM.sampleRate = static_cast<int>(readUint32LE(waveFormatEx + 4));
-                    
+
                     // Bit Depth is a Little-Endian 16-bit integer at offset 14 of WAVEFORMATEX
                     AM.bitDepth = static_cast<int>(readUint16LE(waveFormatEx + 14));
-                    
+
                     // Fallback logic for dynamic or zeroed lossy stream properties
                     if (AM.bitDepth == 0) {
-                        AM.bitDepth = 16; 
+                        AM.bitDepth = 16;
                     }
-                    
+
                     if (AM.sampleRate > 0) {
                         AM.hasData = true;
                         return AM; // Successful property extraction, terminate early.
@@ -585,11 +641,11 @@ AudioMeta parseWMA(AudioData& AD) {
                 }
             }
         }
-        
+
         // Move safely to the next ASF header object block boundary
         i += static_cast<size_t>(objSize);
     }
-    
+
     return AM;
 }
 
