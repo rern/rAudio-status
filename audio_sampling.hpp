@@ -188,60 +188,59 @@ AudioMeta parseDFF(AudioData& AD) {
     AudioMeta AM;
     AM.bitDepth = 1; // DSD streams are universally 1-bit by specification
 
-    // Validate minimal buffer bounds and the master "FRM8" magic signature
     if (!AD.h || AD.size < 12) return AM;
     if (std::memcmp(AD.h, "FRM8", 4) != 0) return AM;
 
-    // The FRM8 header specifies the absolute format type at index 12 (e.g., "DSD ")
+    // FIX: previously fell through on mismatch instead of returning.
     if (AD.size < 16 || std::memcmp(AD.h + 12, "DSD ", 4) != 0) {
-        // Fallback or exit if it's an unsupported FRM8 sub-type
+        return AM;
     }
 
-    // Modern structured chunk navigation loop (Starts at index 16 past FRM8 + Size + DSD )
     size_t i = 16;
     while (i + 12 <= AD.size) {
         const uint8_t* chunkID = AD.h + i;
         uint64_t chunkSize = readUint64BE(chunkID + 4);
 
-        // Safety break to prevent out-of-bounds memory reading or integer wrapping exploits
         if (i + 12 + chunkSize > AD.size) {
             break;
         }
 
-        // Target the Property Chunk ("PROP"), which encloses format properties like "FS  "
         if (std::memcmp(chunkID, "PROP", 4) == 0 && chunkSize >= 4) {
-            // Confirm PROP type is "SND " (Sound description)
             if (std::memcmp(chunkID + 12, "SND ", 4) == 0) {
-                size_t propOffset = i + 16; // Skip PROP ID (4), Size (8), and "SND " (4)
+                size_t propOffset = i + 16;
                 size_t propEnd = i + 12 + chunkSize;
 
-                // Loop through nested property sub-chunks (these use standard 32-bit or 64-bit headers)
                 while (propOffset + 12 <= propEnd) {
                     const uint8_t* subChunkID = AD.h + propOffset;
                     uint64_t subChunkSize = readUint64BE(subChunkID + 4);
 
                     if (propOffset + 12 + subChunkSize > propEnd) break;
 
-                    // Match Sample Rate property chunk identifier
                     if (std::memcmp(subChunkID, "FS  ", 4) == 0 && subChunkSize >= 4) {
                         AM.sampleRate = static_cast<int>(readUint32BE(subChunkID + 12));
                         AM.hasData = (AM.sampleRate > 0);
-                        return AM; // Successfully extracted target properties, exit early
+                        return AM;
                     }
 
-                    // Properties are usually unpadded, advance by header (12) + size
-                    propOffset += 12 + subChunkSize;
+                    // FIX: DSDIFF pads odd-sized chunk data to an even boundary.
+                    // The original code advanced by 12 + subChunkSize unconditionally,
+                    // which desyncs sub-chunk parsing after any odd-sized chunk
+                    // (e.g. "CMPR") appearing before "FS  ".
+                    size_t subStep = 12 + subChunkSize;
+                    if (subChunkSize % 2 != 0) {
+                        subStep++;
+                    }
+                    if (subStep < 12) subStep = 12;
+
+                    propOffset += subStep;
                 }
             }
         }
 
-        // DFF chunks must align on even byte boundaries if their size is odd
         size_t step = 12 + chunkSize;
         if (chunkSize % 2 != 0) {
             step++;
         }
-
-        // Anti-infinite loop guard
         if (step < 12) step = 12;
 
         i += step;
@@ -254,21 +253,16 @@ AudioMeta parseDSF(AudioData& AD) {
     AudioMeta AM;
     AM.bitDepth = 1; // DSD streams are universally 1-bit by specification
 
-    // Safety guard: The combined DSD (28 bytes) and fmt (52 bytes) chunks require 
-    // at least 80 bytes of lookahead data to safely read the sample rate at offset 60.
     if (!AD.h || AD.size < 80) return AM;
 
-    // 1. Validate the master "DSD " chunk signature at the beginning
     if (std::memcmp(AD.h, "DSD ", 4) != 0) return AM;
-
-    // 2. Validate the nested "fmt " chunk signature (starts at absolute offset 28)
     if (std::memcmp(AD.h + 28, "fmt ", 4) != 0) return AM;
 
-    // 3. Extract Sample Rate (Little-Endian 32-bit integer) at absolute offset 60
-    AM.sampleRate = static_cast<int>(readUint32LE(AD.h + 60));
-    
-    // Safety verification: Ensure the parsed sample rate is realistic for DSD 
-    // (e.g., DSD64 is 2822400 Hz, DSD128 is 5644800 Hz, etc.)
+    // FIX: samplingFrequency is at absolute offset 56, not 60.
+    // Offset 60 is bitsPerSample (1 or 8) — reading it as sample rate
+    // was silently producing garbage values like 1 or 8.
+    AM.sampleRate = static_cast<int>(readUint32LE(AD.h + 56));
+
     AM.hasData = (AM.sampleRate > 0);
 
     return AM;

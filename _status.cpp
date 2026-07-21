@@ -268,7 +268,10 @@ public:
 
         if (!V.STOP) {
             const mpd_audio_format *audio = mpd_status_get_audio_format(status);
-            if (audio != nullptr) {
+            if (audio->bits == MPD_SAMPLE_FORMAT_DSD) {
+                V.BITDEPTH   = 1;
+                V.SAMPLERATE = audio->sample_rate * 8; // sample_rate in bytes
+            } else {
                 V.BITDEPTH   = audio->bits;
                 V.SAMPLERATE = audio->sample_rate;
                 V.BITRATE    = mpd_status_get_kbit_rate(status);
@@ -494,9 +497,9 @@ int status() {
         }
     }
 
-    if (V.SAMPLERATE > 1000000) { // dsd
+    if (V.BITDEPTH == 1) { // dsd
         uint32_t base = (V.SAMPLERATE % 48000 == 0) ? 48000 : 44100;
-        V.SAMPLING = "DSD "+ std::to_string(V.SAMPLERATE / base) +" • "+
+        V.SAMPLING = "DSD"+ std::to_string(V.SAMPLERATE / base) +" "+
                      std::format("{:.2f}", V.SAMPLERATE / 1000000.0) +" MHz";
     }
 
