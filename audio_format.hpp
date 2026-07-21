@@ -46,7 +46,8 @@ enum class AF {
     na
 };
 struct AudioData {
-    AF format;
+    AF format   = AF::na;   // default-initialized: never left indeterminate,
+                             // safe to read even if readFile() bails out early
     std::ifstream file;
     std::vector<uint8_t> buffer; // owns the raw header bytes; AD.h points into this
     bool error  = true;
@@ -54,9 +55,12 @@ struct AudioData {
     size_t size = 0;
 };
 namespace Utils {
-    // A lightweight, zero-cost compile-time string comparator
-    // Replaces std::memcmp safely for constexpr contexts
-    constexpr bool matchMagic(const uint8_t* data, std::string_view magic, size_t offset = 0) noexcept {
+    // A lightweight, zero-cost compile-time string comparator.
+    // Replaces std::memcmp safely for constexpr contexts.
+    // Bounds-checked against dataSize so it is safe to call even if a future
+    // caller forgets (or gets wrong) an external size guard.
+    constexpr bool matchMagic(const uint8_t* data, size_t dataSize, std::string_view magic, size_t offset = 0) noexcept {
+        if (offset > dataSize || magic.size() > dataSize - offset) return false;
         for (size_t i = 0; i < magic.size(); ++i) {
             if (data[offset + i] != static_cast<uint8_t>(magic[i])) return false;
         }
@@ -72,36 +76,36 @@ namespace Utils {
 
         // --- MP3 ---
         // Matches ID3v2 tag ("ID3") OR MPEG Audio Frame Sync (0xFFE0 mask)
-        if ((size >= 3 && matchMagic(h, "ID3")) || 
+        if (matchMagic(h, size, "ID3") ||
             (size >= 2 && h[0] == 0xFF && (h[1] & 0xE0) == 0xE0)) {
             return AF::mp3;
         }
         // --- FLAC ---
-        if (size >= 4 && matchMagic(h, "fLaC")) return AF::flac;
+        if (matchMagic(h, size, "fLaC")) return AF::flac;
         // --- WAV (RIFF Container) ---
-        if (size >= 12 && matchMagic(h, "RIFF") && matchMagic(h, "WAVE", 8)) return AF::wav;
+        if (matchMagic(h, size, "RIFF") && matchMagic(h, size, "WAVE", 8)) return AF::wav;
         // --- M4A / AAC (MP4 Container) ---
-        if (size >= 8 && matchMagic(h, "ftyp", 4)) return AF::m4a;
+        if (matchMagic(h, size, "ftyp", 4)) return AF::m4a;
         // --- AIFF / AIFC (IFF Container) ---
-        if (size >= 12 && matchMagic(h, "FORM")) {
-            if (matchMagic(h, "AIFF", 8) || matchMagic(h, "AIFC", 8)) return AF::aiff;
+        if (matchMagic(h, size, "FORM")) {
+            if (matchMagic(h, size, "AIFF", 8) || matchMagic(h, size, "AIFC", 8)) return AF::aiff;
         }
         // --- DSF (DSD Stream File) ---
-        if (size >= 4 && matchMagic(h, "DSD ")) return AF::dsf;
+        if (matchMagic(h, size, "DSD ")) return AF::dsf;
         // --- DFF (DSDIFF Container) ---
-        if (size >= 4 && matchMagic(h, "FRM8")) return AF::dff;
+        if (matchMagic(h, size, "FRM8")) return AF::dff;
         // --- APE (Monkey's Audio) ---
-        if (size >= 4 && matchMagic(h, "MAC ")) return AF::ape;
+        if (matchMagic(h, size, "MAC ")) return AF::ape;
         // --- OGG (Vorbis / Opus Container) ---
-        if (size >= 4 && matchMagic(h, "OggS")) return AF::ogg;
+        if (matchMagic(h, size, "OggS")) return AF::ogg;
         // --- WMA (ASF Container GUID Object) ---
-        if (size >= 16 && 
-            h[0] == 0x30 && h[1] == 0x26 && h[2] == 0xB2 && h[3] == 0x75 && 
+        if (size >= 16 &&
+            h[0] == 0x30 && h[1] == 0x26 && h[2] == 0xB2 && h[3] == 0x75 &&
             h[4] == 0x8E && h[5] == 0x66 && h[6] == 0xCF && h[7] == 0x11) {
             return AF::wma;
         }
 
-        return AF::na; 
+        return AF::na;
     }
 
     AudioData readFile(const std::string& FILE_SOURCE, const bool return_file) {
@@ -111,8 +115,8 @@ namespace Utils {
             std::cerr << "Error: AudioData readFile - " << FILE_SOURCE << '\n';
         } else {
             AD.buffer.resize(4096);
-            file.read((char*)AD.buffer.data(), AD.buffer.size());
-            AD.size = file.gcount();
+            file.read(reinterpret_cast<char*>(AD.buffer.data()), AD.buffer.size());
+            AD.size = static_cast<size_t>(file.gcount());
             if (AD.size < 16) {
                 std::cerr << "Error: AD.size < 16\n";
             } else {

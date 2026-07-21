@@ -13,9 +13,9 @@ struct AudioEmbedded {
 };
 
 inline uint32_t readSynchsafeInt32(const uint8_t* b) noexcept {
-    return (static_cast<uint32_t>(b[0] & 0x7F) << 21) | 
+    return (static_cast<uint32_t>(b[0] & 0x7F) << 21) |
            (static_cast<uint32_t>(b[1] & 0x7F) << 14) |
-           (static_cast<uint32_t>(b[2] & 0x7F) << 7)  | 
+           (static_cast<uint32_t>(b[2] & 0x7F) << 7)  |
            static_cast<uint32_t>(b[3] & 0x7F);
 }
 
@@ -26,7 +26,7 @@ std::vector<uint8_t> decodeBase64(const std::string& input) {
     const std::string b64 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
     std::vector<int> T(256, -1);
     for (int i = 0; i < 64; i++) T[static_cast<uint8_t>(b64[i])] = i;
-    
+
     std::vector<uint8_t> out;
     int val = 0, valb = -8;
     for (char c : input) {
@@ -42,18 +42,72 @@ std::vector<uint8_t> decodeBase64(const std::string& input) {
     return out;
 }
 
+// Converts a little/big-endian UTF-16 byte buffer (optionally BOM-prefixed) to UTF-8.
+// Shared by ID3v2 (encoding 0x01/0x02) and WMA (WM/Lyrics, which is always UTF-16LE).
+std::string utf16ToUtf8(const uint8_t* textPtr, size_t payloadLen, bool forceBigEndian = false) {
+    std::string converted;
+    size_t i = 0;
+
+    if (payloadLen >= 2) {
+        if ((textPtr[0] == 0xFF && textPtr[1] == 0xFE) || (textPtr[0] == 0xFE && textPtr[1] == 0xFF)) {
+            i += 2;
+        }
+    }
+
+    bool isBigEndian = forceBigEndian || (payloadLen >= 2 && textPtr[0] == 0xFE && textPtr[1] == 0xFF);
+
+    for (; i + 1 < payloadLen; i += 2) {
+        uint16_t unicodeChar = isBigEndian ?
+            static_cast<uint16_t>((textPtr[i] << 8) | textPtr[i + 1]) :
+            static_cast<uint16_t>((textPtr[i + 1] << 8) | textPtr[i]);
+
+        if (unicodeChar == 0) break;
+
+        if (unicodeChar < 0x80) {
+            converted += static_cast<char>(unicodeChar);
+        } else if (unicodeChar < 0x800) {
+            converted += static_cast<char>((unicodeChar >> 6) | 0xC0);
+            converted += static_cast<char>((unicodeChar & 0x3F) | 0x80);
+        } else {
+            converted += static_cast<char>((unicodeChar >> 12) | 0xE0);
+            converted += static_cast<char>(((unicodeChar >> 6) & 0x3F) | 0x80);
+            converted += static_cast<char>((unicodeChar & 0x3F) | 0x80);
+        }
+    }
+    return converted;
+}
+
+// Restricts a string to a safe filesystem-path component: alnum, '_', '-' only.
+// Strips everything else (including '/', '\', '.', NUL) so it can never escape
+// the directory it's written into or resolve to an unexpected path.
+std::string sanitizeFilename(const std::string& input) {
+    std::string out;
+    out.reserve(input.size());
+    for (char c : input) {
+        uint8_t uc = static_cast<uint8_t>(c);
+        if (std::isalnum(uc) || c == '_' || c == '-') {
+            out += c;
+        }
+    }
+    return out;
+}
+
 void embeddedCoverart(const uint8_t* d, size_t size, AudioEmbedded& AE, size_t absoluteOffset) {
     if (size < 32) return;
     uint32_t mimeLen = readUint32BE(d + 4);
-    if (8 + mimeLen + 4 < size) {
+    // Bounds check must use <=: we are about to read 4 bytes at offset (8 + mimeLen).
+    if (8 + mimeLen + 4 <= size) {
         AE.mimeType = std::string(reinterpret_cast<const char*>(d + 8), mimeLen);
         uint32_t descLen = readUint32BE(d + 8 + mimeLen);
         size_t cur = 8 + mimeLen + 4 + descLen + 16;
         if (cur + 4 <= size) {
             uint32_t imgSize = readUint32BE(d + cur);
-            AE.hasArt = true;
-            AE.artOffset = absoluteOffset + cur + 4;
-            AE.artSize = imgSize;
+            // Guard against a declared image size that would run past the buffer.
+            if (cur + 4 + static_cast<size_t>(imgSize) <= size || absoluteOffset != 0) {
+                AE.hasArt = true;
+                AE.artOffset = absoluteOffset + cur + 4;
+                AE.artSize = imgSize;
+            }
         }
     }
 }
@@ -69,11 +123,12 @@ std::string stripTimeSync(const std::string& input) {
             if (closeBracket != std::string::npos) {
                 bool isTimestamp = false;
                 size_t insideLen = closeBracket - i - 1;
-                
+
                 if (insideLen >= 4) {
                     size_t colonPos = input.find(':', i);
                     if (colonPos != std::string::npos && colonPos < closeBracket) {
-                        if (std::isdigit(static_cast<uint8_t>(input[colonPos - 1])) && 
+                        if (colonPos > i && colonPos + 1 < closeBracket &&
+                            std::isdigit(static_cast<uint8_t>(input[colonPos - 1])) &&
                             std::isdigit(static_cast<uint8_t>(input[colonPos + 1]))) {
                             isTimestamp = true;
                         }
@@ -85,7 +140,7 @@ std::string stripTimeSync(const std::string& input) {
                     while (i < input.size() && (input[i] == ' ' || input[i] == '\t')) {
                         i++;
                     }
-                    continue; 
+                    continue;
                 }
             }
         }
@@ -97,7 +152,7 @@ std::string stripTimeSync(const std::string& input) {
     while (startPos < result.size() && (result[startPos] == '\r' || result[startPos] == '\n')) {
         startPos++;
     }
-    
+
     return (startPos > 0) ? result.substr(startPos) : result;
 }
 
@@ -115,99 +170,82 @@ AudioEmbedded embeddedID3v2(AudioData& AD, size_t startOffset = 0) {
     size_t tagDataStart = startOffset + 10;
     std::vector<uint8_t> tagData(tagSize);
     AD.file.read(reinterpret_cast<char*>(tagData.data()), tagSize);
-    size_t bytesRead = AD.file.gcount();
+    size_t bytesRead = static_cast<size_t>(AD.file.gcount());
 
     size_t offset = 0;
     while (offset + 10 < bytesRead) {
-        if (tagData[offset] == 0) break; 
-        
+        if (tagData[offset] == 0) break;
+
         uint32_t frameSize = readUint32BE(tagData.data() + offset + 4);
         if (offset + 10 + frameSize > bytesRead) break;
-        
+
         if (std::memcmp(tagData.data() + offset, "APIC", 4) == 0) {
             size_t cur = offset + 10;
-            cur += 1; // Skip text encoding descriptor byte
+            size_t frameEnd = offset + 10 + frameSize;
+
+            if (cur < frameEnd) cur += 1; // Skip text encoding descriptor byte
             std::string mime = "";
-            while (cur < bytesRead && tagData[cur] != 0) {
+            while (cur < bytesRead && cur < frameEnd && tagData[cur] != 0) {
                 mime += static_cast<char>(tagData[cur]);
                 cur++;
             }
-            cur += 1; // Skip null string terminator
-            cur += 1; // Skip picture type descriptor index byte
-            while (cur < bytesRead && tagData[cur] != 0) cur++; 
-            cur += 1; // Skip description string null terminator
+            if (cur < frameEnd) cur += 1; // Skip null string terminator
+            if (cur < frameEnd) cur += 1; // Skip picture type descriptor index byte
+            while (cur < bytesRead && cur < frameEnd && tagData[cur] != 0) cur++;
+            if (cur < frameEnd) cur += 1; // Skip description string null terminator
 
-            AE.hasArt = true;
-            AE.mimeType = mime;
-            AE.artOffset = tagDataStart + cur;
-            AE.artSize = frameSize - (cur - (offset + 10));
+            size_t consumed = cur - (offset + 10);
+            if (consumed <= frameSize) {
+                AE.hasArt = true;
+                AE.mimeType = mime;
+                AE.artOffset = tagDataStart + cur;
+                AE.artSize = frameSize - consumed;
+            }
         }
         else if (std::memcmp(tagData.data() + offset, "USLT", 4) == 0) {
             size_t cur = offset + 10;
+            size_t frameEnd = offset + 10 + frameSize;
+            if (cur >= frameEnd) { offset += 10 + frameSize; continue; }
+
             uint8_t encoding = tagData[cur];
-            cur += 1; 
-            cur += 3; // Skip ISO-639 Language Code mapping token array (3 bytes)
+            cur += 1;
+            cur += 3; // Skip ISO-639 language code (3 bytes)
+            if (cur > frameEnd) { offset += 10 + frameSize; continue; }
 
             if (encoding == 0x00 || encoding == 0x03) {
-                while (cur < bytesRead && tagData[cur] != 0) cur++;
-                cur += 1; 
-            } else { 
-                while (cur + 1 < bytesRead && !(tagData[cur] == 0 && tagData[cur + 1] == 0)) {
+                while (cur < bytesRead && cur < frameEnd && tagData[cur] != 0) cur++;
+                if (cur < frameEnd) cur += 1;
+            } else {
+                while (cur + 1 < bytesRead && cur + 1 < frameEnd &&
+                       !(tagData[cur] == 0 && tagData[cur + 1] == 0)) {
                     cur += 2;
                 }
-                cur += 2; 
+                cur += 2;
             }
 
-            size_t payloadLen = frameSize - (cur - (offset + 10));
-            if (cur + payloadLen <= bytesRead && payloadLen > 0) {
-                AE.hasLyrics = true;
-                const uint8_t* textPtr = tagData.data() + cur;
+            size_t consumed = cur - (offset + 10);
+            if (consumed <= frameSize) {
+                size_t payloadLen = frameSize - consumed;
+                if (cur + payloadLen <= bytesRead && payloadLen > 0) {
+                    AE.hasLyrics = true;
+                    const uint8_t* textPtr = tagData.data() + cur;
 
-                if (encoding == 0x00 || encoding == 0x03) {
-                    AE.lyricsText = std::string(reinterpret_cast<const char*>(textPtr), payloadLen);
-                } 
-                else if (encoding == 0x01 || encoding == 0x02) {
-                    std::string converted = "";
-                    size_t i = 0;
-
-                    if (payloadLen >= 2) {
-                        if ((textPtr[0] == 0xFF && textPtr[1] == 0xFE) || (textPtr[0] == 0xFE && textPtr[1] == 0xFF)) {
-                            i += 2;
-                        }
+                    if (encoding == 0x00 || encoding == 0x03) {
+                        AE.lyricsText = std::string(reinterpret_cast<const char*>(textPtr), payloadLen);
+                    } else if (encoding == 0x01 || encoding == 0x02) {
+                        AE.lyricsText = utf16ToUtf8(textPtr, payloadLen, encoding == 0x02);
                     }
-
-                    bool isBigEndian = (encoding == 0x02) || (payloadLen >= 2 && textPtr[0] == 0xFE);
-
-                    for (; i + 1 < payloadLen; i += 2) {
-                        uint16_t unicodeChar = isBigEndian ? 
-                            ((textPtr[i] << 8) | textPtr[i + 1]) : 
-                            ((textPtr[i + 1] << 8) | textPtr[i]);
-
-                        if (unicodeChar == 0) break; 
-
-                        if (unicodeChar < 0x80) {
-                            converted += static_cast<char>(unicodeChar);
-                        } else if (unicodeChar < 0x800) {
-                            converted += static_cast<char>((unicodeChar >> 6) | 0xC0);
-                            converted += static_cast<char>((unicodeChar & 0x3F) | 0x80);
-                        } else {
-                            converted += static_cast<char>((unicodeChar >> 12) | 0xE0);
-                            converted += static_cast<char>(((unicodeChar >> 6) & 0x3F) | 0x80);
-                            converted += static_cast<char>((unicodeChar & 0x3F) | 0x80);
-                        }
-                    }
-                    AE.lyricsText = converted;
                 }
             }
         }
-        
+
         offset += 10 + frameSize;
     }
     return AE;
 }
 
 AudioEmbedded embeddedAIFF(AudioData& AD) {
-    AudioEmbedded AE; 
+    AudioEmbedded AE;
     AD.file.seekg(0, std::ios::beg);
 
     uint8_t formHeader[12];
@@ -222,14 +260,14 @@ AudioEmbedded embeddedAIFF(AudioData& AD) {
 
         uint32_t chunkSize = readUint32BE(chunkHeader + 4);
         std::streampos chunkDataPos = AD.file.tellg();
-        std::streamoff paddedSize = chunkSize + (chunkSize % 2); 
+        std::streamoff paddedSize = chunkSize + (chunkSize % 2);
         std::streampos nextChunkPos = chunkDataPos + paddedSize;
 
         if (std::memcmp(chunkHeader, "ID3 ", 4) == 0) {
             AE = embeddedID3v2(AD, static_cast<size_t>(chunkDataPos));
-            break; 
+            break;
         }
-        
+
         AD.file.seekg(nextChunkPos, std::ios::beg);
     }
     return AE;
@@ -251,10 +289,10 @@ AudioEmbedded embeddedAPE(AudioData& AD) {
 
     uint32_t tagSize = readUint32LE(footer + 12);
     uint32_t itemCount = readUint32LE(footer + 16);
-    
+
     std::streamoff tagOffsetAdjustment = (footer[23] & 0x80) ? 0 : 32;
     AD.file.seekg(fileSize - std::streamoff(tagSize) - tagOffsetAdjustment, std::ios::beg);
-    
+
     if (tagOffsetAdjustment == 32) {
         uint8_t headerCheck[32];
         AD.file.read(reinterpret_cast<char*>(headerCheck), 32);
@@ -264,10 +302,11 @@ AudioEmbedded embeddedAPE(AudioData& AD) {
     for (uint32_t i = 0; i < itemCount; ++i) {
         if (!AD.file.good()) break;
 
-        uint8_t lenBuf[4]; 
+        uint8_t lenBuf[4];
         AD.file.read(reinterpret_cast<char*>(lenBuf), 4);
+        if (AD.file.gcount() < 4) break;
         uint32_t valueLength = readUint32LE(lenBuf);
-        
+
         AD.file.seekg(4, std::ios::cur); // Skip itemFlags segment
 
         std::string key = "";
@@ -275,6 +314,7 @@ AudioEmbedded embeddedAPE(AudioData& AD) {
         while (AD.file.get(ch) && ch != '\0') {
             key += ch;
         }
+        if (!AD.file.good()) break;
 
         std::streampos itemPayloadStart = AD.file.tellg();
         std::streampos nextItemPos = itemPayloadStart + std::streamoff(valueLength);
@@ -284,19 +324,27 @@ AudioEmbedded embeddedAPE(AudioData& AD) {
             AD.file.read(valBuf.data(), valueLength);
             AE.hasLyrics = true;
             AE.lyricsText = std::string(valBuf.data(), valueLength);
-        } 
+        }
         else if (key == "Cover Art (Front)" && !AE.hasArt) {
             std::vector<char> nameBuf(valueLength);
             AD.file.read(nameBuf.data(), valueLength);
-            
-            std::string filename(nameBuf.data()); 
-            size_t nameLen = filename.length() + 1; 
-            
+
+            // filename is a NUL-terminated string followed by the raw image bytes
+            size_t nameLen = 0;
+            while (nameLen < valueLength && nameBuf[nameLen] != '\0') nameLen++;
+            nameLen += 1; // include the NUL terminator
+
             if (nameLen < valueLength) {
+                std::string filename(nameBuf.data(), nameLen - 1);
+                std::string ext;
+                size_t dot = filename.find_last_of('.');
+                if (dot != std::string::npos) ext = filename.substr(dot + 1);
+                for (auto& c : ext) c = static_cast<char>(std::tolower(static_cast<uint8_t>(c)));
+
                 AE.hasArt = true;
                 AE.artOffset = static_cast<size_t>(itemPayloadStart) + nameLen;
                 AE.artSize = valueLength - nameLen;
-                AE.mimeType = "image/"; 
+                AE.mimeType = (ext == "png") ? "image/png" : "image/jpeg";
             }
         }
 
@@ -308,7 +356,7 @@ AudioEmbedded embeddedAPE(AudioData& AD) {
 AudioEmbedded embeddedDFF(AudioData& AD) {
     AudioEmbedded AE;
     AD.file.seekg(0, std::ios::end);
-    size_t fileSize = AD.file.tellg();
+    size_t fileSize = static_cast<size_t>(AD.file.tellg());
     if (fileSize < 1024) return AE;
 
     size_t checkOffset = fileSize - 1024;
@@ -340,7 +388,7 @@ AudioEmbedded embeddedDSF(AudioData& AD) {
 
 AudioEmbedded embeddedFLAC(AudioData& AD) {
     AudioEmbedded AE;
-    AD.file.seekg(4, std::ios::beg); 
+    AD.file.seekg(4, std::ios::beg);
 
     bool isLast = false;
     while (!isLast) {
@@ -361,12 +409,12 @@ AudioEmbedded embeddedFLAC(AudioData& AD) {
             std::vector<uint8_t> blockData(size);
             AD.file.read(reinterpret_cast<char*>(blockData.data()), size);
             embeddedCoverart(blockData.data(), size, AE, absolutePayloadPos);
-        } 
+        }
         else if (type == 4) { // Metadata block type VORBIS_COMMENT
             std::vector<char> commentData(size);
             AD.file.read(commentData.data(), size);
             std::string comments(commentData.data(), size);
-            
+
             size_t lyrPos = comments.find("LYRICS=");
             if (lyrPos == std::string::npos) lyrPos = comments.find("UNSYNCEDLYRICS=");
             if (lyrPos != std::string::npos) {
@@ -378,7 +426,7 @@ AudioEmbedded embeddedFLAC(AudioData& AD) {
                 }
                 AE.lyricsText = comments.substr(start, length);
             }
-            
+
             size_t b64ArtPos = comments.find("METADATA_BLOCK_PICTURE=");
             if (b64ArtPos != std::string::npos) {
                 size_t start = b64ArtPos + 23;
@@ -389,7 +437,7 @@ AudioEmbedded embeddedFLAC(AudioData& AD) {
                 std::vector<uint8_t> rawPicBlock = decodeBase64(b64Str);
                 embeddedCoverart(rawPicBlock.data(), rawPicBlock.size(), AE, 0);
                 if (AE.artSize > 0) {
-                    AE.artOffset = 0; 
+                    AE.artOffset = 0;
                     AE.lyricsText += "\n[BUFFERED_ART_PAYLOAD:" + b64Str + "]";
                 }
             }
@@ -403,10 +451,10 @@ AudioEmbedded embeddedFLAC(AudioData& AD) {
 AudioEmbedded embeddedM4A(AudioData& AD) {
     AudioEmbedded AE;
     AD.file.seekg(0, std::ios::end);
-    size_t fileSize = AD.file.tellg();
+    size_t fileSize = static_cast<size_t>(AD.file.tellg());
     AD.file.seekg(0, std::ios::beg);
 
-    size_t sizeToRead = std::min(fileSize, static_cast<size_t>(1024000)); 
+    size_t sizeToRead = std::min(fileSize, static_cast<size_t>(1024000));
     std::vector<uint8_t> atomBuffer(sizeToRead);
     AD.file.read(reinterpret_cast<char*>(atomBuffer.data()), sizeToRead);
     std::string dataBlock(reinterpret_cast<const char*>(atomBuffer.data()), sizeToRead);
@@ -417,20 +465,24 @@ AudioEmbedded embeddedM4A(AudioData& AD) {
         if (atomDataOffset + 16 < sizeToRead) {
             uint32_t dataAtomSize = readUint32BE(atomBuffer.data() + atomDataOffset);
             uint32_t dataType = readUint32BE(atomBuffer.data() + atomDataOffset + 8);
-            AE.hasArt = true;
-            AE.mimeType = (dataType == 14) ? "image/png" : "image/jpeg";
-            AE.artOffset = atomDataOffset + 16; 
-            AE.artSize = dataAtomSize - 16;
+            if (dataAtomSize >= 16 && atomDataOffset + dataAtomSize <= sizeToRead) {
+                AE.hasArt = true;
+                AE.mimeType = (dataType == 14) ? "image/png" : "image/jpeg";
+                AE.artOffset = atomDataOffset + 16;
+                AE.artSize = dataAtomSize - 16;
+            }
         }
     }
-    
+
     size_t lyrPos = dataBlock.find("\xa9lyr");
     if (lyrPos != std::string::npos) {
         size_t atomDataOffset = lyrPos + 8;
         if (atomDataOffset + 16 < sizeToRead) {
             uint32_t dataAtomSize = readUint32BE(atomBuffer.data() + atomDataOffset);
-            AE.hasLyrics = true;
-            AE.lyricsText = std::string(reinterpret_cast<const char*>(atomBuffer.data() + atomDataOffset + 16), dataAtomSize - 16);
+            if (dataAtomSize >= 16 && atomDataOffset + dataAtomSize <= sizeToRead) {
+                AE.hasLyrics = true;
+                AE.lyricsText = std::string(reinterpret_cast<const char*>(atomBuffer.data() + atomDataOffset + 16), dataAtomSize - 16);
+            }
         }
     }
     return AE;
@@ -500,7 +552,7 @@ AudioEmbedded embeddedWAV(AudioData& AD) {
 }
 
 AudioEmbedded embeddedWMA(AudioData& AD) {
-    AudioEmbedded AE; 
+    AudioEmbedded AE;
     AD.file.seekg(0, std::ios::beg);
 
     const uint8_t asfHeaderGUID[16]    = {0x30,0x26,0xB2,0x75,0x8E,0x66,0xCF,0x11,0xA6,0xD9,0x00,0xAA,0x00,0x62,0xCE,0x6C};
@@ -511,16 +563,16 @@ AudioEmbedded embeddedWMA(AudioData& AD) {
     AD.file.read(reinterpret_cast<char*>(fileGUID), 16);
     if (AD.file.gcount() < 16 || std::memcmp(asfHeaderGUID, fileGUID, 16) != 0) return AE;
 
-    AD.file.seekg(8, std::ios::cur); 
+    AD.file.seekg(8, std::ios::cur);
     uint32_t subObjectCount = 0;
     AD.file.read(reinterpret_cast<char*>(&subObjectCount), 4);
-    AD.file.seekg(2, std::ios::cur); 
+    AD.file.seekg(2, std::ios::cur);
 
     for (uint32_t i = 0; i < subObjectCount; ++i) {
         uint8_t objGUID[16];
         AD.file.read(reinterpret_cast<char*>(objGUID), 16);
         if (AD.file.gcount() < 16) break;
-        
+
         uint64_t objSize = 0;
         AD.file.read(reinterpret_cast<char*>(&objSize), 8);
         if (AD.file.gcount() < 8 || objSize < 24) break;
@@ -528,12 +580,12 @@ AudioEmbedded embeddedWMA(AudioData& AD) {
         std::streampos nextObjPos = AD.file.tellg() + std::streamoff(objSize - 24);
 
         if (std::memcmp(asfId3ObjectGUID, objGUID, 16) == 0) {
-            AD.file.seekg(4, std::ios::cur); 
+            AD.file.seekg(4, std::ios::cur);
             size_t id3AbsOffset = static_cast<size_t>(AD.file.tellg());
-            
+
             AudioEmbedded id3data = embeddedID3v2(AD, id3AbsOffset);
             if (id3data.hasLyrics || id3data.hasArt) {
-                return id3data; 
+                return id3data;
             }
         }
         else if (std::memcmp(extContentGUID, objGUID, 16) == 0) {
@@ -554,16 +606,35 @@ AudioEmbedded embeddedWMA(AudioData& AD) {
                 AD.file.read(reinterpret_cast<char*>(valBuf.data()), valLen);
 
                 if (wideName == L"WM/Lyrics" && !AE.hasLyrics) {
+                    // WM/Lyrics is stored as UTF-16LE; convert properly instead of
+                    // truncating each 16-bit code unit to a single char.
                     AE.hasLyrics = true;
-                    std::wstring wideLyr(reinterpret_cast<wchar_t*>(valBuf.data()), valLen / 2);
-                    AE.lyricsText = std::string(wideLyr.begin(), wideLyr.end());
+                    AE.lyricsText = utf16ToUtf8(valBuf.data(), valLen, /*forceBigEndian=*/false);
                 } else if (wideName == L"WM/Picture" && !AE.hasArt) {
                     if (valLen > 5) {
-                        AE.hasArt = true;
+                        uint8_t pictureType = valBuf[0];
                         uint32_t imgSize = readUint32LE(valBuf.data() + 1);
-                        AE.artSize = imgSize;
-                        AE.artOffset = descriptorPayloadOffset + 5; 
-                        AE.mimeType = "image/";
+                        size_t cur = 5;
+
+                        // MIME type is a NUL-terminated UTF-16LE string.
+                        std::string mime;
+                        size_t mimeStart = cur;
+                        while (cur + 1 < valLen && !(valBuf[cur] == 0 && valBuf[cur + 1] == 0)) cur += 2;
+                        if (cur + 1 < valLen) {
+                            mime = utf16ToUtf8(valBuf.data() + mimeStart, cur - mimeStart, false);
+                            cur += 2; // skip NUL terminator
+                        }
+                        // Description string, also UTF-16LE NUL-terminated.
+                        while (cur + 1 < valLen && !(valBuf[cur] == 0 && valBuf[cur + 1] == 0)) cur += 2;
+                        if (cur + 1 < valLen) cur += 2;
+
+                        if (cur + imgSize <= valLen) {
+                            AE.hasArt = true;
+                            AE.artSize = imgSize;
+                            AE.artOffset = descriptorPayloadOffset + cur;
+                            AE.mimeType = mime.empty() ? "image/jpeg" : mime;
+                        }
+                        (void)pictureType;
                     }
                 }
             }
@@ -579,40 +650,53 @@ AudioEmbedded embeddedWMA(AudioData& AD) {
 std::string extractEmbedded(AudioData& AD, const AudioEmbedded& AE, const bool& COVERART, const std::string& FILE_SOURCE, std::string& file_embedded) {
     if (COVERART) {
         if (!AE.hasArt || AE.artSize == 0) return {};
-        
-        file_embedded += AE.mimeType.find("png") != std::string::npos ? ".png" : ".jpg";
-        std::ofstream file_out("/srv/http"+ file_embedded, std::ios::binary);
+
+        // Sanitize the caller-supplied name so it cannot contain path separators
+        // or traversal sequences ("..", "/") before it is used to build a path
+        // under the web-served output directory.
+        std::string safeBase = sanitizeFilename(!file_embedded.empty() ? file_embedded : FILE_SOURCE);
+        if (safeBase.empty()) return {};
+
+        std::string safeName = safeBase + (AE.mimeType.find("png") != std::string::npos ? ".png" : ".jpg");
+        std::ofstream file_out("/srv/http/" + safeName, std::ios::binary);
         if (!file_out) return {};
 
-        if (AE.artOffset == 0) { 
+        if (AE.artOffset == 0) {
             size_t marker = AE.lyricsText.find("[BUFFERED_ART_PAYLOAD:");
             if (marker != std::string::npos) {
                 size_t start = marker + 22;
                 size_t end = AE.lyricsText.find("]", start);
                 if (end != std::string::npos) {
                     std::vector<uint8_t> decryptedRaw = decodeBase64(AE.lyricsText.substr(start, end - start));
-                    const uint8_t* rawPtr = decryptedRaw.data();
-                    uint32_t mLen = readUint32BE(rawPtr + 4);
-                    uint32_t dLen = readUint32BE(rawPtr + 8 + mLen);
-                    size_t payloadStart = 8 + mLen + 4 + dLen + 16 + 4;
-                    
-                    if (payloadStart + AE.artSize <= decryptedRaw.size()) {
-                        file_out.write(reinterpret_cast<const char*>(rawPtr + payloadStart), AE.artSize);
-                        return file_embedded;
+                    if (decryptedRaw.size() >= 32) {
+                        const uint8_t* rawPtr = decryptedRaw.data();
+                        uint32_t mLen = readUint32BE(rawPtr + 4);
+                        if (8 + mLen + 4 <= decryptedRaw.size()) {
+                            uint32_t dLen = readUint32BE(rawPtr + 8 + mLen);
+                            size_t payloadStart = 8 + mLen + 4 + dLen + 16 + 4;
+
+                            if (payloadStart <= decryptedRaw.size() &&
+                                AE.artSize <= decryptedRaw.size() - payloadStart) {
+                                file_out.write(reinterpret_cast<const char*>(rawPtr + payloadStart), AE.artSize);
+                                file_embedded = safeName;
+                                return file_embedded;
+                            }
+                        }
                     }
                 }
             }
             return {};
-        } else { 
+        } else {
             AD.file.seekg(AE.artOffset, std::ios::beg);
             std::vector<char> buffer(AE.artSize);
             AD.file.read(buffer.data(), AE.artSize);
             file_out.write(buffer.data(), AE.artSize);
+            file_embedded = safeName;
             return file_embedded;
         }
     } else {
         if (!AE.hasLyrics || AE.lyricsText.empty()) return {};
-        
+
         size_t marker = AE.lyricsText.find("\n[BUFFERED_ART_PAYLOAD:");
         std::string lyrics = (marker != std::string::npos) ? AE.lyricsText.substr(0, marker) : AE.lyricsText;
         lyrics = stripTimeSync(lyrics);
