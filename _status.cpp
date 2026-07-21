@@ -656,16 +656,16 @@ int main(int argc, char **argv) {
     if (ok_status == 1) return 1;
 
     V.WS_STATUS.erase(0, 1);
+    if (ARGV1 == "-o") {
+        std::cout << "{"+ V.WS_STATUS +"}" << '\n';
+        return 0;
+    }
+
     V.WS_STATUS = "{\"channel\": \"mpdplayer\", \"data\": {"+ V.WS_STATUS +"}}";
 
     if (ARGV1 == "-p") return wsPush("127.0.0.1", V.WS_STATUS);
 
     if (ARGV1 == "-b") return wsBroadcast(V.WS_STATUS); // snapserver broadcast on change
-
-    if (ARGV1 == "-o") {
-        std::cout << V.WS_STATUS << '\n';
-        return 0;
-    }
 
     std::cerr
         << "\nPlayback status of rAudio\n\n"
