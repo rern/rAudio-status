@@ -499,8 +499,7 @@ int status() {
 
     if (V.BITDEPTH == 1) { // dsd
         uint32_t base = (V.SAMPLERATE % 48000 == 0) ? 48000 : 44100;
-        V.SAMPLING = "DSD"+ std::to_string(V.SAMPLERATE / base) +" "+
-                     std::format("{:.2f}", V.SAMPLERATE / 1000000.0) +" MHz";
+        V.SAMPLING = std::format("DSD{} {:.2f} MHz", V.SAMPLERATE / base, V.SAMPLERATE / 1000000.0);
     }
 
     samplingString();
