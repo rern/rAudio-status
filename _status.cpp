@@ -150,15 +150,14 @@ void radioArtistTitle() {
 void samplingString() {
     if (!V.SAMPLING.empty()) return;
     
-    if (V.BITDEPTH)   V.SAMPLING += std::to_string(V.BITDEPTH) +"bit ";
-    if (V.SAMPLERATE) V.SAMPLING += std::format("{:.1f}", V.SAMPLERATE / 1000.0) +" kHz";
-    if (V.BITRATE) {
-        if (V.BITRATE > 1000) {
-            V.SAMPLING += ' '+ std::format("{:.1f}", V.BITRATE / 1000.00) +" Mbit/s";
-        } else {
-            V.SAMPLING += ' '+ std::to_string(V.BITRATE) +" kbit/s";
-        }
+    if (V.BITDEPTH == 1) { // dsd
+        uint32_t base = (V.SAMPLERATE % 48000 == 0) ? 48000 : 44100;
+        V.SAMPLING    = std::format("DSD{} {:.3f} MHz", V.SAMPLERATE / base, V.SAMPLERATE / 1000000.0);
+        return;
     }
+    
+    if (V.SAMPLERATE) V.SAMPLING += std::format("{}bit {:.0f} kHz", V.BITDEPTH, V.SAMPLERATE / 1000.0);
+    if (V.BITRATE)    V.SAMPLING += std::format(" {} kbit/s", V.BITRATE);
 }
 
 void statusFormat(const std::string& k, const std::string& v) {
@@ -286,7 +285,7 @@ public:
         I["crossfade"] = mpd_status_get_crossfade(status);
 
         I["pllength"]  = V.PLLENGTH;
-        I["song"]      = V.POS;
+        I["position"]  = V.POS;
 
         V.ELAPSED      = mpd_status_get_elapsed_time(status);
         V.VOLUME       = mpd_status_get_volume(status);
@@ -316,7 +315,17 @@ public:
         V.URI_INI = V.URI.substr(0, 4);
         std::unordered_set<std::string> scheme = {"http", "rtmp", "rtp:", "rtsp"};
         V.STREAM  = scheme.count(V.URI_INI) > 0;
-        if (V.STOP) V.TIME = mpd_song_get_duration(song); // 0 / false
+        if (V.STOP) {
+            V.TIME = mpd_song_get_duration(song); // 0 / false
+            if (!V.STREAM) {
+                AudioData AD = Utils::readFile(V.FILE.c_str(), false);
+                if (!AD.error) {
+                    AudioMeta AM = getSampling(AD);
+                    V.BITDEPTH   = AM.bitDepth;
+                    V.SAMPLERATE = AM.sampleRate;
+                }
+            }
+        }
         mpd_tag_type tags[] = {
             MPD_TAG_ARTIST,
             MPD_TAG_ALBUM,
@@ -346,15 +355,6 @@ public:
         }
 
         if (S["Title"].empty()) S["Title"] = V.FILE.stem().string();
-
-        if (V.STOP) {
-            AudioData AD = Utils::readFile(V.FILE.c_str(), false);
-            if (!AD.error) {
-                AudioMeta AM = getSampling(AD);
-                V.BITDEPTH   = AM.bitDepth;
-                V.SAMPLERATE = AM.sampleRate;
-            }
-        }
     }
 };
 
@@ -497,14 +497,9 @@ int status() {
         }
     }
 
-    if (V.BITDEPTH == 1) { // dsd
-        uint32_t base = (V.SAMPLERATE % 48000 == 0) ? 48000 : 44100;
-        V.SAMPLING = std::format("DSD{} {:.2f} MHz", V.SAMPLERATE / base, V.SAMPLERATE / 1000000.0);
-    }
-
     samplingString();
     V.SAMPLING += ( V.SAMPLING.empty() ? "" : " • " ) + V.EXT;
-    if (V.PLLENGTH > 1) V.POSITION = std::to_string(V.POS + 1) +"/"+ std::to_string(V.PLLENGTH) +" • ";
+    if (V.PLLENGTH > 1) V.SAMPLING = std::format("{}/{} • {}", V.POS + 1, V.PLLENGTH, V.SAMPLING);
     if (V.ICON.empty() && V.PLAYER != "mpd") V.ICON = V.PLAYER;
 
     S["control"]  = V.CONTROL;
@@ -512,7 +507,6 @@ int status() {
     S["icon"]     = V.ICON;
     S["file"]     = V.URI;
     S["player"]   = V.PLAYER;
-    S["position"] = V.POSITION;
     S["sampling"] = V.SAMPLING;
     S["state"]    = V.STATE;
     if (V.WEBRADIO) {

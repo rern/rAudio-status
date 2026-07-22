@@ -70,7 +70,6 @@ struct Global {
         EXT,
         ICON,
         PLAYER,
-        POSITION,
         SAMPLING,
         STATE,
         STATION,
