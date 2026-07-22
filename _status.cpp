@@ -148,16 +148,13 @@ void radioArtistTitle() {
 }
 
 void samplingString() {
-    if (!V.SAMPLING.empty()) return;
-    
     if (V.BITDEPTH == 1) { // dsd
         uint32_t base = (V.SAMPLERATE % 48000 == 0) ? 48000 : 44100;
         V.SAMPLING    = std::format("DSD{} {:.3f} MHz", V.SAMPLERATE / base, V.SAMPLERATE / 1000000.0);
-        return;
+    } else {
+        if (V.SAMPLERATE) V.SAMPLING += std::format("{}bit {:.0f} kHz", V.BITDEPTH, V.SAMPLERATE / 1000.0);
+        if (V.BITRATE)    V.SAMPLING += std::format(" {} kbit/s", V.BITRATE);
     }
-    
-    if (V.SAMPLERATE) V.SAMPLING += std::format("{}bit {:.0f} kHz", V.BITDEPTH, V.SAMPLERATE / 1000.0);
-    if (V.BITRATE)    V.SAMPLING += std::format(" {} kbit/s", V.BITRATE);
 }
 
 void statusFormat(const std::string& k, const std::string& v) {
@@ -497,14 +494,13 @@ int status() {
         }
     }
 
-    samplingString();
-    V.SAMPLING += ( V.SAMPLING.empty() ? "" : " • " ) + V.EXT;
+    if (V.SAMPLING.empty()) samplingString();
+    V.SAMPLING += V.SAMPLING.empty() ? V.EXT : " • "+ V.EXT;
     if (V.PLLENGTH > 1) V.SAMPLING = std::format("{}/{} • {}", V.POS + 1, V.PLLENGTH, V.SAMPLING);
-    if (V.ICON.empty() && V.PLAYER != "mpd") V.ICON = V.PLAYER;
 
     S["control"]  = V.CONTROL;
     S["coverart"] = V.COVERART;
-    S["icon"]     = V.ICON;
+    S["icon"]     = V.ICON.empty() && V.PLAYER != "mpd" ? V.PLAYER : V.ICON;
     S["file"]     = V.URI;
     S["player"]   = V.PLAYER;
     S["sampling"] = V.SAMPLING;
