@@ -17,7 +17,7 @@ else
 fi
      #strip
 opt="
--O2
+$( [[ ! $1 ]] && echo -O2 )
 $opt
 _status.cpp
 -o $file_bin
@@ -28,6 +28,8 @@ echo g++ $opt
 echo ...
 
 g++ $opt
+
+[[ $? != 0 ]] && exit
 
 mv /srv/http/bash/$file_bin{,.bak}
 cp -f $file_bin /srv/http/bash

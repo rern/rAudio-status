@@ -28,6 +28,7 @@ namespace fs = std::filesystem;
 struct Global {
     bool
         COVER       = true,
+        GET_COVER   = false,
         JSON        = true,
         PAUSE       = false,
         PLAY        = false,

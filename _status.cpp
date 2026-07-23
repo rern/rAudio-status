@@ -39,21 +39,26 @@ void fileCover(const std::string& file) {
         if (names.count(w)) V.COVERART = entry.path().string();
     }
     if (!V.COVERART.empty()) return;
-
-    std::string file_embedded = fileEmbedded(file); // get already extracted
-    for (const std::string& ext : {".jpg", ".png"}) {
-         if (fs::exists("/srv/http"+ file_embedded + ext)) {
-             V.COVERART = file_embedded + ext;
-             return;
-         }
+    
+    std::string file_embedded;
+    if (V.GET_COVER) {
+        file_embedded = directory +"/cover"; // extract to .../cover.jpg(png)
+    } else {
+        file_embedded = fileEmbedded(file); // get already extracted
+        for (const std::string& ext : {".jpg", ".png"}) {
+             if (fs::exists("/srv/http"+ file_embedded + ext)) {
+                 V.COVERART = file_embedded + ext;
+                 return;
+             }
+        }
     }
-
+    
     AudioData AD = Utils::readFile(file, true);
     if (AD.error) return;
 
     AudioEmbedded AE = getEmbeddedAudio(AD);
     V.COVERART       = extractEmbedded(AD, AE, true, file, file_embedded);
-    if (!V.COVERART.empty()) return;
+    if (V.GET_COVER || !V.COVERART.empty()) return;
 
     V.ALBUM  = hasData("Album");
     V.ARTIST = hasData("Artist");
@@ -600,11 +605,13 @@ int main(int argc, char **argv) {
         if (argc > 3) {
             S["Artist"]      = argv[3];
             S["Album"]       = argv[4];
+        } else {
+            V.GET_COVER = true;
         }
         fileCover(file);
         if (V.COVERART.empty()) return 1;
 
-        std::cout << V.COVERART;
+        std::cout << V.COVERART << '\n';
         return 0;
     }
 
@@ -613,11 +620,8 @@ int main(int argc, char **argv) {
         AudioData AD = Utils::readFile(file, true);
         if (AD.error) return 1;
 
-        AudioEmbedded AE   = getEmbeddedAudio(AD);
-        std::string lyrics = extractEmbedded(AD, AE, false, file, ARGV1);
-        if (lyrics.empty()) return 1;
-
-        std::cout << lyrics;
+        AudioEmbedded AE = getEmbeddedAudio(AD);
+        std::cout << extractEmbedded(AD, AE, false, file) << std::endl;
         return 0;
     }
     

@@ -82,21 +82,6 @@ std::string utf16ToUtf8(const uint8_t* textPtr, size_t payloadLen, bool forceBig
     return converted;
 }
 
-// Restricts a string to a safe filesystem-path component: alnum, '_', '-' only.
-// Strips everything else (including '/', '\', '.', NUL) so it can never escape
-// the directory it's written into or resolve to an unexpected path.
-std::string sanitizeFilename(const std::string& input) {
-    std::string out;
-    out.reserve(input.size());
-    for (char c : input) {
-        uint8_t uc = static_cast<uint8_t>(c);
-        if (std::isalnum(uc) || c == '_' || c == '-') {
-            out += c;
-        }
-    }
-    return out;
-}
-
 // Extracts a Vorbis-comment field's value using the 4-byte little-endian
 // length prefix that precedes every comment entry in the stream, rather
 // than scanning forward for '\n'. Scanning for '\n' silently truncates any
@@ -696,18 +681,13 @@ AudioEmbedded embeddedWMA(AudioData& AD) {
 // ============================================================================
 // EXPORT PROCESSING MANAGER
 // ============================================================================
-std::string extractEmbedded(AudioData& AD, const AudioEmbedded& AE, const bool& COVERART, const std::string& FILE_SOURCE, std::string& file_embedded) {
+std::string extractEmbedded(AudioData& AD, const AudioEmbedded& AE, const bool& COVERART, const std::string& FILE_SOURCE, std::string file_embedded = "") {
     if (COVERART) {
         if (!AE.hasArt || AE.artSize == 0) return {};
 
-        // Sanitize the caller-supplied name so it cannot contain path separators
-        // or traversal sequences ("..", "/") before it is used to build a path
-        // under the web-served output directory.
-        std::string safeBase = sanitizeFilename(!file_embedded.empty() ? file_embedded : FILE_SOURCE);
-        if (safeBase.empty()) return {};
-
-        std::string safeName = safeBase + (AE.mimeType.find("png") != std::string::npos ? ".png" : ".jpg");
-        std::ofstream file_out("/srv/http/" + safeName, std::ios::binary);
+        file_embedded += AE.mimeType.find("png") != std::string::npos ? ".png" : ".jpg";
+        std::string file_target = V.GET_COVER ? file_embedded : "/srv/http/" + file_embedded;
+        std::ofstream file_out(file_target, std::ios::binary);
         if (!file_out) return {};
 
         if (AE.artOffset == 0 && !AE.pendingArtBase64.empty()) {
@@ -722,7 +702,6 @@ std::string extractEmbedded(AudioData& AD, const AudioEmbedded& AE, const bool& 
                     if (payloadStart <= decodedRaw.size() &&
                         AE.artSize <= decodedRaw.size() - payloadStart) {
                         file_out.write(reinterpret_cast<const char*>(rawPtr + payloadStart), AE.artSize);
-                        file_embedded = safeName;
                         return file_embedded;
                     }
                 }
@@ -733,7 +712,6 @@ std::string extractEmbedded(AudioData& AD, const AudioEmbedded& AE, const bool& 
             std::vector<char> buffer(AE.artSize);
             AD.file.read(buffer.data(), AE.artSize);
             file_out.write(buffer.data(), AE.artSize);
-            file_embedded = safeName;
             return file_embedded;
         }
         return {};
