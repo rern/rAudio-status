@@ -58,30 +58,27 @@ void fileCover(const std::string& file) {
     V.ALBUM  = hasData("Album");
     V.ARTIST = hasData("Artist");
     V.TITLE  = hasData("Title");
-    std::string path_no_ext;
-    if (V.ARTIST && (V.ALBUM || V.TITLE)) { // get already fetched
-        std::string path_no_ext = DIR.SHM +"online/";
-        path_no_ext += alphaNumericLower(S["Artist"] + S[V.ALBUM ? "Album" : "Title"]);
-        for (const std::string& x : {".jpg", ".png"}) {
-            if (fs::exists(path_no_ext + x)) {
-                V.COVERART = path_no_ext.substr(9) + x;
-                break;
-            }
+    if (!V.ARTIST || (!V.ALBUM && !V.TITLE)) return;
+        
+    std::string path_no_ext = DIR.SHM +"online/"; // get already fetched
+    path_no_ext += alphaNumericLower(S["Artist"] + S[V.ALBUM ? "Album" : "Title"]);
+    for (const std::string& x : {".jpg", ".png"}) {
+        if (fs::exists(path_no_ext + x)) {
+            V.COVERART = path_no_ext.substr(9) + x;
+            break;
         }
-        if (V.COVERART.empty() && V.UPNP) coverartUpnp(path_no_ext);
     }
+    if (V.COVERART.empty() && V.UPNP) coverartUpnp(path_no_ext);
     if (!V.COVERART.empty()) return;
 
-    if (V.ARTIST && (V.ALBUM || V.TITLE)) { // online coverart (in background)
-        std::string args = S["Artist"] +'\n';
-        if (V.ALBUM) {
-            args += S["Album"] +"\nCMD ARTIST ALBUM";
-        } else {
-            args += S["Title"] +"\nCMD ARTIST TITLE";
-        }
-        std::string cmd = "/srv/http/bash/status-coverartonline.sh \"cmd\n"+ args +"\" &> /dev/null &";
-        std::system(cmd.c_str());
+    std::string args = S["Artist"] +'\n'; // online coverart (in background)
+    if (V.ALBUM) {
+        args += S["Album"] +"\nCMD ARTIST ALBUM";
+    } else {
+        args += S["Title"] +"\nCMD ARTIST TITLE";
     }
+    std::string cmd = "/srv/http/bash/status-coverartonline.sh \"cmd\n"+ args +"\" &> /dev/null &";
+    std::system(cmd.c_str());
 }
 
 bool inKey(const std::string& k, const std::vector<std::string>& vector) {
@@ -598,15 +595,12 @@ int main(int argc, char **argv) {
         return 0;
     }
 
-    if (ARGV1 == "-C" || ARGV1 == "-L") {
-        if (argc < 5) {
-            std::cerr << "Error: Arguments missing - file artist album\n";
-            return 1;
-        }
-
+    if (ARGV1 == "-C") {
         std::string file = argv[2];
-        S["Artist"]      = argv[3];
-        S["Album"]       = argv[4];
+        if (argc > 3) {
+            S["Artist"]      = argv[3];
+            S["Album"]       = argv[4];
+        }
         fileCover(file);
         if (V.COVERART.empty()) return 1;
 
@@ -614,6 +608,19 @@ int main(int argc, char **argv) {
         return 0;
     }
 
+    if (ARGV1 == "-L") {
+        std::string file = argv[2];
+        AudioData AD = Utils::readFile(file, true);
+        if (AD.error) return 1;
+
+        AudioEmbedded AE   = getEmbeddedAudio(AD);
+        std::string lyrics = extractEmbedded(AD, AE, false, file, ARGV1);
+        if (lyrics.empty()) return 1;
+
+        std::cout << lyrics;
+        return 0;
+    }
+    
     if (ARGV1 == "-W" || ARGV1 == "-P") {
         std::string
             ip  = "127.0.0.1",

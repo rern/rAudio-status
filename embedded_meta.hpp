@@ -4,12 +4,17 @@
 // CORE DATA STRUCTURES
 // ============================================================================
 struct AudioEmbedded {
-    bool hasArt            = false;
-    bool hasLyrics         = false;
-    size_t artOffset       = 0;
-    size_t artSize         = 0;
-    std::string lyricsText = "";
-    std::string mimeType   = "";
+    bool hasArt              = false;
+    bool hasLyrics           = false;
+    size_t artOffset         = 0;
+    size_t artSize           = 0;
+    std::string lyricsText   = "";
+    std::string mimeType     = "";
+    // Base64 payload for art that lives inside a decoded METADATA_BLOCK_PICTURE
+    // buffer rather than at a direct file offset. Kept separate from
+    // lyricsText so the two concerns can never be confused by a future edit
+    // that forgets to gate on hasLyrics/hasArt.
+    std::string pendingArtBase64 = "";
 };
 
 inline uint32_t readSynchsafeInt32(const uint8_t* b) noexcept {
@@ -90,6 +95,34 @@ std::string sanitizeFilename(const std::string& input) {
         }
     }
     return out;
+}
+
+// Extracts a Vorbis-comment field's value using the 4-byte little-endian
+// length prefix that precedes every comment entry in the stream, rather
+// than scanning forward for '\n'. Scanning for '\n' silently truncates any
+// value containing embedded line breaks -- the common case for multi-line
+// lyrics -- and it also risks landing on a *substring* match (e.g. "LYRICS="
+// matching inside "UNSYNCEDLYRICS="). Validating the declared length against
+// the buffer bounds rejects those false matches naturally: if keyPos doesn't
+// actually sit at the start of a comment entry, the 4 bytes before it won't
+// decode to a length that produces a field fitting inside the buffer.
+bool extractVorbisField(const std::string& block, const std::string& key, std::string& outValue) {
+    size_t searchFrom = 0;
+    while (true) {
+        size_t keyPos = block.find(key, searchFrom);
+        if (keyPos == std::string::npos) return false;
+
+        if (keyPos >= 4) {
+            uint32_t declaredLen = readUint32LE(
+                reinterpret_cast<const uint8_t*>(block.data() + keyPos - 4));
+            size_t fieldEnd = keyPos + declaredLen;
+            if (declaredLen >= key.size() && fieldEnd <= block.size() && fieldEnd >= keyPos) {
+                outValue = block.substr(keyPos + key.size(), declaredLen - key.size());
+                return true;
+            }
+        }
+        searchFrom = keyPos + 1; // false match (e.g. mid-string), keep looking
+    }
 }
 
 void embeddedCoverart(const uint8_t* d, size_t size, AudioEmbedded& AE, size_t absoluteOffset) {
@@ -173,7 +206,9 @@ AudioEmbedded embeddedID3v2(AudioData& AD, size_t startOffset = 0) {
     size_t bytesRead = static_cast<size_t>(AD.file.gcount());
 
     size_t offset = 0;
-    while (offset + 10 < bytesRead) {
+    // <=: a zero-size frame whose 10-byte header ends exactly at bytesRead
+    // is still a valid (if empty) frame and must not be dropped.
+    while (offset + 10 <= bytesRead) {
         if (tagData[offset] == 0) break;
 
         uint32_t frameSize = readUint32BE(tagData.data() + offset + 4);
@@ -415,30 +450,23 @@ AudioEmbedded embeddedFLAC(AudioData& AD) {
             AD.file.read(commentData.data(), size);
             std::string comments(commentData.data(), size);
 
-            size_t lyrPos = comments.find("LYRICS=");
-            if (lyrPos == std::string::npos) lyrPos = comments.find("UNSYNCEDLYRICS=");
-            if (lyrPos != std::string::npos) {
+            // Length-prefix based extraction: correctly captures multi-line
+            // lyrics (unlike scanning for '\n') and cannot be fooled by
+            // "LYRICS=" matching inside "UNSYNCEDLYRICS=".
+            std::string lyricsVal;
+            if (extractVorbisField(comments, "LYRICS=", lyricsVal) ||
+                extractVorbisField(comments, "UNSYNCEDLYRICS=", lyricsVal)) {
                 AE.hasLyrics = true;
-                size_t start = comments.find("=", lyrPos) + 1;
-                size_t length = 0;
-                while (start + length < comments.size() && comments[start + length] != '\n' && comments[start + length] != '\0') {
-                    length++;
-                }
-                AE.lyricsText = comments.substr(start, length);
+                AE.lyricsText = lyricsVal;
             }
 
-            size_t b64ArtPos = comments.find("METADATA_BLOCK_PICTURE=");
-            if (b64ArtPos != std::string::npos) {
-                size_t start = b64ArtPos + 23;
-                std::string b64Str = "";
-                while (start < comments.size() && (std::isalnum(static_cast<uint8_t>(comments[start])) || comments[start] == '+' || comments[start] == '/' || comments[start] == '=')) {
-                    b64Str += comments[start++];
-                }
-                std::vector<uint8_t> rawPicBlock = decodeBase64(b64Str);
+            std::string picVal;
+            if (extractVorbisField(comments, "METADATA_BLOCK_PICTURE=", picVal)) {
+                std::vector<uint8_t> rawPicBlock = decodeBase64(picVal);
                 embeddedCoverart(rawPicBlock.data(), rawPicBlock.size(), AE, 0);
                 if (AE.artSize > 0) {
                     AE.artOffset = 0;
-                    AE.lyricsText += "\n[BUFFERED_ART_PAYLOAD:" + b64Str + "]";
+                    AE.pendingArtBase64 = picVal;
                 }
             }
         }
@@ -462,7 +490,9 @@ AudioEmbedded embeddedM4A(AudioData& AD) {
     size_t covrPos = dataBlock.find("covr");
     if (covrPos != std::string::npos) {
         size_t atomDataOffset = covrPos + 8;
-        if (atomDataOffset + 16 < sizeToRead) {
+        // <=: the last valid byte of the 16-byte data-atom sub-header can sit
+        // exactly at sizeToRead - 1, so the boundary itself is legal.
+        if (atomDataOffset + 16 <= sizeToRead) {
             uint32_t dataAtomSize = readUint32BE(atomBuffer.data() + atomDataOffset);
             uint32_t dataType = readUint32BE(atomBuffer.data() + atomDataOffset + 8);
             if (dataAtomSize >= 16 && atomDataOffset + dataAtomSize <= sizeToRead) {
@@ -477,7 +507,7 @@ AudioEmbedded embeddedM4A(AudioData& AD) {
     size_t lyrPos = dataBlock.find("\xa9lyr");
     if (lyrPos != std::string::npos) {
         size_t atomDataOffset = lyrPos + 8;
-        if (atomDataOffset + 16 < sizeToRead) {
+        if (atomDataOffset + 16 <= sizeToRead) {
             uint32_t dataAtomSize = readUint32BE(atomBuffer.data() + atomDataOffset);
             if (dataAtomSize >= 16 && atomDataOffset + dataAtomSize <= sizeToRead) {
                 AE.hasLyrics = true;
@@ -498,33 +528,27 @@ AudioEmbedded embeddedOGG(AudioData& AD) {
     AD.file.read(reinterpret_cast<char*>(buffer.data()), sizeToRead);
     std::string dataBlock(reinterpret_cast<const char*>(buffer.data()), sizeToRead);
 
-    size_t lyrPos = dataBlock.find("LYRICS=");
-    if (lyrPos == std::string::npos) lyrPos = dataBlock.find("UNSYNCEDLYRICS=");
-    if (lyrPos != std::string::npos) {
+    // NOTE: this treats the read window as one flat buffer. For the common
+    // case (comment header fits in the first page or two) that's fine, but
+    // if a lyrics field is large enough to straddle an Ogg page boundary,
+    // the length-prefix bytes are no longer contiguous with the field
+    // content and extraction will fail cleanly (returns false) rather than
+    // silently truncating. Full correctness there requires page-aware
+    // packet reassembly, which is out of scope here.
+    std::string lyricsVal;
+    if (extractVorbisField(dataBlock, "LYRICS=", lyricsVal) ||
+        extractVorbisField(dataBlock, "UNSYNCEDLYRICS=", lyricsVal)) {
         AE.hasLyrics = true;
-        size_t start = dataBlock.find("=", lyrPos) + 1;
-        size_t length = 0;
-        while (start + length < dataBlock.size() && dataBlock[start + length] != '\n' && dataBlock[start + length] != '\0') {
-            if (start + length + 4 <= dataBlock.size() && dataBlock.compare(start + length, 4, "OggS") == 0) {
-                break;
-            }
-            length++;
-        }
-        AE.lyricsText = dataBlock.substr(start, length);
+        AE.lyricsText = lyricsVal;
     }
 
-    size_t b64ArtPos = dataBlock.find("METADATA_BLOCK_PICTURE=");
-    if (b64ArtPos != std::string::npos) {
-        size_t start = b64ArtPos + 23;
-        std::string b64Str = "";
-        while (start < dataBlock.size() && (std::isalnum(static_cast<uint8_t>(dataBlock[start])) || dataBlock[start] == '+' || dataBlock[start] == '/' || dataBlock[start] == '=')) {
-            b64Str += dataBlock[start++];
-        }
-        std::vector<uint8_t> rawPicBlock = decodeBase64(b64Str);
+    std::string picVal;
+    if (extractVorbisField(dataBlock, "METADATA_BLOCK_PICTURE=", picVal)) {
+        std::vector<uint8_t> rawPicBlock = decodeBase64(picVal);
         embeddedCoverart(rawPicBlock.data(), rawPicBlock.size(), AE, 0);
         if (AE.artSize > 0) {
             AE.artOffset = 0;
-            AE.lyricsText += "\n[BUFFERED_ART_PAYLOAD:" + b64Str + "]";
+            AE.pendingArtBase64 = picVal;
         }
     }
     return AE;
@@ -564,8 +588,16 @@ AudioEmbedded embeddedWMA(AudioData& AD) {
     if (AD.file.gcount() < 16 || std::memcmp(asfHeaderGUID, fileGUID, 16) != 0) return AE;
 
     AD.file.seekg(8, std::ios::cur);
-    uint32_t subObjectCount = 0;
-    AD.file.read(reinterpret_cast<char*>(&subObjectCount), 4);
+
+    // Read as raw bytes and decode via the shared LE helper rather than
+    // reading straight into a uint32_t/uint16_t: the raw-read approach
+    // silently assumed host little-endianness and bypassed the same
+    // readUint32LE/readUint16LE conventions used everywhere else in this
+    // file, which is both non-portable and inconsistent style.
+    uint8_t countBuf[4];
+    AD.file.read(reinterpret_cast<char*>(countBuf), 4);
+    if (AD.file.gcount() < 4) return AE;
+    uint32_t subObjectCount = readUint32LE(countBuf);
     AD.file.seekg(2, std::ios::cur);
 
     for (uint32_t i = 0; i < subObjectCount; ++i) {
@@ -573,9 +605,11 @@ AudioEmbedded embeddedWMA(AudioData& AD) {
         AD.file.read(reinterpret_cast<char*>(objGUID), 16);
         if (AD.file.gcount() < 16) break;
 
-        uint64_t objSize = 0;
-        AD.file.read(reinterpret_cast<char*>(&objSize), 8);
-        if (AD.file.gcount() < 8 || objSize < 24) break;
+        uint8_t objSizeBuf[8];
+        AD.file.read(reinterpret_cast<char*>(objSizeBuf), 8);
+        if (AD.file.gcount() < 8) break;
+        uint64_t objSize = readUint64LE(objSizeBuf);
+        if (objSize < 24) break;
 
         std::streampos nextObjPos = AD.file.tellg() + std::streamoff(objSize - 24);
 
@@ -589,28 +623,43 @@ AudioEmbedded embeddedWMA(AudioData& AD) {
             }
         }
         else if (std::memcmp(extContentGUID, objGUID, 16) == 0) {
-            uint16_t descriptorsCount = 0;
-            AD.file.read(reinterpret_cast<char*>(&descriptorsCount), 2);
+            uint8_t descCountBuf[2];
+            AD.file.read(reinterpret_cast<char*>(descCountBuf), 2);
+            uint16_t descriptorsCount = readUint16LE(descCountBuf);
 
             for (uint16_t j = 0; j < descriptorsCount; ++j) {
-                uint16_t nameLen = 0; AD.file.read(reinterpret_cast<char*>(&nameLen), 2);
-                std::vector<wchar_t> nameBuf(nameLen / 2);
-                AD.file.read(reinterpret_cast<char*>(nameBuf.data()), nameLen);
-                std::wstring wideName(nameBuf.data(), nameLen / 2);
+                uint8_t nameLenBuf[2];
+                AD.file.read(reinterpret_cast<char*>(nameLenBuf), 2);
+                uint16_t nameLen = readUint16LE(nameLenBuf);
 
-                uint16_t dataType = 0; AD.file.read(reinterpret_cast<char*>(&dataType), 2);
-                uint16_t valLen = 0; AD.file.read(reinterpret_cast<char*>(&valLen), 2);
+                std::vector<uint8_t> nameBuf(nameLen);
+                AD.file.read(reinterpret_cast<char*>(nameBuf.data()), nameLen);
+                // Descriptor names are UTF-16LE; ASCII-range field names
+                // (WM/Lyrics, WM/Picture) survive a narrow byte-pair compare.
+                std::string narrowName;
+                for (size_t k = 0; k + 1 < nameBuf.size(); k += 2) {
+                    if (nameBuf[k + 1] == 0) narrowName += static_cast<char>(nameBuf[k]);
+                }
+
+                uint8_t dataTypeBuf[2];
+                AD.file.read(reinterpret_cast<char*>(dataTypeBuf), 2);
+                uint16_t dataType = readUint16LE(dataTypeBuf);
+                (void)dataType;
+
+                uint8_t valLenBuf[2];
+                AD.file.read(reinterpret_cast<char*>(valLenBuf), 2);
+                uint16_t valLen = readUint16LE(valLenBuf);
 
                 std::vector<uint8_t> valBuf(valLen);
                 size_t descriptorPayloadOffset = static_cast<size_t>(AD.file.tellg());
                 AD.file.read(reinterpret_cast<char*>(valBuf.data()), valLen);
 
-                if (wideName == L"WM/Lyrics" && !AE.hasLyrics) {
+                if (narrowName == "WM/Lyrics" && !AE.hasLyrics) {
                     // WM/Lyrics is stored as UTF-16LE; convert properly instead of
                     // truncating each 16-bit code unit to a single char.
                     AE.hasLyrics = true;
                     AE.lyricsText = utf16ToUtf8(valBuf.data(), valLen, /*forceBigEndian=*/false);
-                } else if (wideName == L"WM/Picture" && !AE.hasArt) {
+                } else if (narrowName == "WM/Picture" && !AE.hasArt) {
                     if (valLen > 5) {
                         uint8_t pictureType = valBuf[0];
                         uint32_t imgSize = readUint32LE(valBuf.data() + 1);
@@ -661,32 +710,25 @@ std::string extractEmbedded(AudioData& AD, const AudioEmbedded& AE, const bool& 
         std::ofstream file_out("/srv/http/" + safeName, std::ios::binary);
         if (!file_out) return {};
 
-        if (AE.artOffset == 0) {
-            size_t marker = AE.lyricsText.find("[BUFFERED_ART_PAYLOAD:");
-            if (marker != std::string::npos) {
-                size_t start = marker + 22;
-                size_t end = AE.lyricsText.find("]", start);
-                if (end != std::string::npos) {
-                    std::vector<uint8_t> decryptedRaw = decodeBase64(AE.lyricsText.substr(start, end - start));
-                    if (decryptedRaw.size() >= 32) {
-                        const uint8_t* rawPtr = decryptedRaw.data();
-                        uint32_t mLen = readUint32BE(rawPtr + 4);
-                        if (8 + mLen + 4 <= decryptedRaw.size()) {
-                            uint32_t dLen = readUint32BE(rawPtr + 8 + mLen);
-                            size_t payloadStart = 8 + mLen + 4 + dLen + 16 + 4;
+        if (AE.artOffset == 0 && !AE.pendingArtBase64.empty()) {
+            std::vector<uint8_t> decodedRaw = decodeBase64(AE.pendingArtBase64);
+            if (decodedRaw.size() >= 32) {
+                const uint8_t* rawPtr = decodedRaw.data();
+                uint32_t mLen = readUint32BE(rawPtr + 4);
+                if (8 + mLen + 4 <= decodedRaw.size()) {
+                    uint32_t dLen = readUint32BE(rawPtr + 8 + mLen);
+                    size_t payloadStart = 8 + mLen + 4 + dLen + 16 + 4;
 
-                            if (payloadStart <= decryptedRaw.size() &&
-                                AE.artSize <= decryptedRaw.size() - payloadStart) {
-                                file_out.write(reinterpret_cast<const char*>(rawPtr + payloadStart), AE.artSize);
-                                file_embedded = safeName;
-                                return file_embedded;
-                            }
-                        }
+                    if (payloadStart <= decodedRaw.size() &&
+                        AE.artSize <= decodedRaw.size() - payloadStart) {
+                        file_out.write(reinterpret_cast<const char*>(rawPtr + payloadStart), AE.artSize);
+                        file_embedded = safeName;
+                        return file_embedded;
                     }
                 }
             }
             return {};
-        } else {
+        } else if (AE.artOffset != 0) {
             AD.file.seekg(AE.artOffset, std::ios::beg);
             std::vector<char> buffer(AE.artSize);
             AD.file.read(buffer.data(), AE.artSize);
@@ -694,13 +736,10 @@ std::string extractEmbedded(AudioData& AD, const AudioEmbedded& AE, const bool& 
             file_embedded = safeName;
             return file_embedded;
         }
+        return {};
     } else {
         if (!AE.hasLyrics || AE.lyricsText.empty()) return {};
-
-        size_t marker = AE.lyricsText.find("\n[BUFFERED_ART_PAYLOAD:");
-        std::string lyrics = (marker != std::string::npos) ? AE.lyricsText.substr(0, marker) : AE.lyricsText;
-        lyrics = stripTimeSync(lyrics);
-        return lyrics;
+        return stripTimeSync(AE.lyricsText);
     }
 }
 
