@@ -117,9 +117,6 @@ void radioArtistTitle() {
     size_t p    = title.find(split);
     S["Artist"] = title.substr(0, p);
     title       = title.substr(p + split.length());
-    if (fileContains(title, "/srv/http/assets/data/titles_with_paren")) {
-        title.erase(title.find(" ("));
-    }
     S["Title"]  = title;
 }
 
