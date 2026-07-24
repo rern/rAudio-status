@@ -38,10 +38,6 @@ struct Global {
         VOLUMENONE  = false,
         WEBRADIO    = false,
 
-        ALBUM       = false,
-        ARTIST      = false,
-        TITLE       = false,
-
         AIRPLAY     = false,
         BLUETOOTH   = false,
         MPD         = false,

@@ -58,32 +58,6 @@ void fileCover(const std::string& file) {
 
     AudioEmbedded AE = getEmbeddedAudio(AD);
     V.COVERART       = extractEmbedded(AD, AE, true, file, file_embedded);
-    if (V.GET_COVER || !V.COVERART.empty()) return;
-
-    V.ALBUM  = hasData("Album");
-    V.ARTIST = hasData("Artist");
-    V.TITLE  = hasData("Title");
-    if (!V.ARTIST || (!V.ALBUM && !V.TITLE)) return;
-        
-    std::string path_no_ext = DIR.SHM +"online/"; // get already fetched
-    path_no_ext += alphaNumericLower(S["Artist"] + S[V.ALBUM ? "Album" : "Title"]);
-    for (const std::string& x : {".jpg", ".png"}) {
-        if (fs::exists(path_no_ext + x)) {
-            V.COVERART = path_no_ext.substr(9) + x;
-            break;
-        }
-    }
-    if (V.COVERART.empty() && V.UPNP) coverartUpnp(path_no_ext);
-    if (!V.COVERART.empty()) return;
-
-    std::string args = S["Artist"] +'\n'; // online coverart (in background)
-    if (V.ALBUM) {
-        args += S["Album"] +"\nCMD ARTIST ALBUM";
-    } else {
-        args += S["Title"] +"\nCMD ARTIST TITLE";
-    }
-    std::string cmd = "/srv/http/bash/status-coverartonline.sh \"cmd\n"+ args +"\" &> /dev/null &";
-    std::system(cmd.c_str());
 }
 
 bool inKey(const std::string& k, const std::vector<std::string>& vector) {
@@ -114,9 +88,9 @@ void kv2var(const std::string& kv) {
                     value.replace(p, 2, "\"");
                     p += 1; // move past the replaced quote
                 }
-                     if (key == "Album")        S["Album"]     = value;
-                else if (key == "Artist")       S["Artist"]    = value;
+                     if (key == "Artist")       S["Artist"]    = value;
                 else if (key == "Title")        S["Title"]     = value;
+                else if (key == "Album")        S["Album"]     = value;
                 else if (key == "coverart")     V.COVERART     = value;
                 else if (key == "state")        V.STATE        = value;
                 else if (key == "sampling")     V.SAMPLING     = value;
@@ -325,13 +299,13 @@ public:
                 }
             }
         }
-        mpd_tag_type tags[] = {
+        mpd_tag_type tags[] = { // keep order for status-coverartonline.sh
             MPD_TAG_ARTIST,
+            MPD_TAG_TITLE,
             MPD_TAG_ALBUM,
             MPD_TAG_ALBUM_ARTIST,
             MPD_TAG_COMPOSER,
-            MPD_TAG_CONDUCTOR,
-            MPD_TAG_TITLE
+            MPD_TAG_CONDUCTOR
         };
         for (mpd_tag_type tag : tags) {
             const char* k = mpd_tag_name(tag);
@@ -341,7 +315,7 @@ public:
         }
         mpd_song_free(song);
 
-        if (V.COVER) fileCover(V.FILE);
+        if (V.COVER && !V.STREAM) fileCover(V.FILE);
 
         if (V.STREAM) return;
 
@@ -500,6 +474,21 @@ int status() {
     V.SAMPLING += V.SAMPLING.empty() ? V.EXT : " • "+ V.EXT;
     if (V.PLLENGTH > 1) V.SAMPLING = std::format("{}/{} • {}", V.POS + 1, V.PLLENGTH, V.SAMPLING);
 
+    if (V.COVER &&
+        V.COVERART.empty() &&
+        !S["Artist"].empty() &&
+        (!S["Album"].empty() || !S["Title"].empty())
+        ) {
+        std::string name = alphaNumericLower(S["Artist"] + (S["Album"].empty() ? S["Title"] : S["Album"]));
+        std::string file = "/data/shm/online/"+ name;
+        for (const std::string& ext : {".jpg", ".png"}) {
+             if (fs::exists("/srv/http"+ file + ext)) {
+                 V.COVERART = file + ext;
+                 break;
+             }
+        }
+    }
+    
     S["control"]  = V.CONTROL;
     S["coverart"] = V.COVERART;
     S["icon"]     = V.ICON.empty() && V.PLAYER != "mpd" ? V.PLAYER : V.ICON;
@@ -510,6 +499,7 @@ int status() {
     if (V.WEBRADIO) {
         S["station"]      = V.STATION;
         S["stationcover"] = V.COVER ? V.STATIONCOVER : "";
+        if (V.STOP) S["Title"] = "";
     }
     if (V.SNAPCAST) S["snapserverip"] = fileContent(DIR.SHM +"snapserverip");
 
