@@ -111,32 +111,12 @@ bool fileContains(const std::string& sub, const std::string& file) {
 }
 
 std::string alphaNumericLower(const std::string& str) {
-    std::string stripped = str;
-    if (str.find('(') != std::string::npos &&
-        !fileContains(str, "/srv/http/assets/data/titles_with_paren")) {
-        stripped.clear();
-        int depth = 0;
-        for (char c : str) {
-            if (c == '(') {
-                if (depth == 0 && !stripped.empty() && stripped.back() == ' ') {
-                    stripped.pop_back();
-                }
-                depth++;
-            } else if (c == ')') {
-                if (depth > 0) depth--;
-            } else if (depth == 0) {
-                stripped += c;
-            }
-        }
+    std::string result;
+    for (unsigned char c : str) {
+        char lower = std::tolower(c);
+        if (std::isalnum(lower)) result.push_back(lower);
     }
-    std::string name;
-    name.reserve(stripped.size());
-    for (unsigned char c : stripped) {
-        if (std::isalnum(c)) {
-            name.push_back(std::tolower(c));
-        }
-    }
-    return name;
+    return result;
 }
 
 std::string fileContent(const std::string& file, const std::string& def = "") {

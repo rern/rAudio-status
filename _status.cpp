@@ -117,6 +117,8 @@ void radioArtistTitle() {
     size_t p    = title.find(split);
     S["Artist"] = title.substr(0, p);
     title       = title.substr(p + split.length());
+    size_t end  = title.find_last_not_of(' ');
+    if (end != std::string::npos) title.erase(end + 1);
     S["Title"]  = title;
 }
 
