@@ -391,7 +391,6 @@ int status() {
             V.VOLUMENONE = true;
         } else {
             V.CONTROL = fileContent(DIR.SHM +"amixercontrol");
-            V.VOLUME  = getVolume("default", V.CONTROL);
         }
     }
 
