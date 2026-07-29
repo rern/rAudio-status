@@ -228,7 +228,7 @@ public:
         switch (mpd_status_get_state(status)) {
             case MPD_STATE_PLAY:  V.STATE = "play";  break;
             case MPD_STATE_PAUSE: V.STATE = "pause"; break;
-            case MPD_STATE_STOP:  V.STATE = "stop";  break;
+            default:              V.STATE = "stop";  break;
         }
         stateSet();
         if (V.PLAY) V.TIMESTAMP = epochMs();
@@ -439,11 +439,12 @@ int status() {
                     } else {
                         radioArtistTitle();
                     }
-                } else {
-                    S["Title"] = ""; // force reset
-                    V.ELAPSED  = 0;  // force reset
+                } else { // force reset
+                    V.ELAPSED  = 0;
                     V.PAUSE    = false;
+                    V.STATE    = "stop";
                     V.STOP     = true;
+                    S["Title"] = "";
                 }
             }
             if (V.COVER) {
