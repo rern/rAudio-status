@@ -288,7 +288,7 @@ public:
         std::unordered_set<std::string> scheme = {"http", "rtmp", "rtp:", "rtsp"};
         V.STREAM  = scheme.count(V.URI_INI) > 0;
         if (V.STOP) {
-            V.TIME = mpd_song_get_duration(song); // 0 / false
+            V.TIME = mpd_song_get_duration(song);
             if (!V.STREAM) {
                 AudioData AD = Utils::readFile(V.FILE.c_str(), false);
                 if (!AD.error) {
@@ -439,6 +439,11 @@ int status() {
                     } else {
                         radioArtistTitle();
                     }
+                } else {
+                    S["Title"] = ""; // force reset
+                    V.ELAPSED  = 0;  // force reset
+                    V.PAUSE    = false;
+                    V.STOP     = true;
                 }
             }
             if (V.COVER) {
