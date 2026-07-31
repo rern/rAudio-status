@@ -11,10 +11,6 @@ if [[ -e /boot/kernel.img ]]; then
 -Wno-psabi
 -idirafter /usr/include
 '
-elif [[ -e /boot/kernel7.img ]]; then
-	opt='
--Wno-psabi
-'
 else
 	[[ -e /boot/kernel7.img ]] && arch=armv7h || arch=aarch64
 	file_bin=status
