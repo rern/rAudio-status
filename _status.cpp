@@ -105,20 +105,6 @@ void kv2var(const std::string& kv) {
         }
     }
 }
-void radioArtistTitle() {
-    std::string title = S["Title"];
-    std::string split;
-         if (title.find(" - ") != std::string::npos) split = " - ";
-    else if (title.find(": ")  != std::string::npos) split = ": ";
-    if (split.empty()) return;
-
-    size_t p    = title.find(split);
-    S["Artist"] = title.substr(0, p);
-    title       = title.substr(p + split.length());
-    size_t end  = title.find_last_not_of(' ');
-    if (end != std::string::npos) title.erase(end + 1);
-    S["Title"]  = title;
-}
 
 void samplingString() {
     if (V.BITDEPTH == 1) { // dsd
@@ -313,18 +299,6 @@ public:
         mpd_song_free(song);
 
         if (V.COVER && !V.STREAM) fileCover(V.FILE);
-
-        if (V.STREAM) return;
-
-        if (S["Artist"].empty()) {
-            if (S["AlbumArtist"].empty()) {
-                S["Artist"] = V.FILE.parent_path().filename().string();
-            } else {
-                S["Artist"] = S["AlbumArtist"];
-            }
-        }
-
-        if (S["Title"].empty()) S["Title"] = V.FILE.stem().string();
     }
 };
 
@@ -465,20 +439,26 @@ int status() {
                         std::string cmd = "systemctl start "+ std::string(V.EXT == "DAB" ? "dab" : "radio") +" &> /dev/null &";
                         std::system(cmd.c_str());
                     }
-                } else if (S["Title"].empty()) {
-                    S["Artist"] = V.STATION;
-                    S["Album"]  = V.URI;
-                } else {
-                    radioArtistTitle();
+                } else if (!S["Title"].empty()) {
+                    std::string title = S["Title"];
+                    std::string split;
+                         if (title.find(" - ") != std::string::npos) split = " - ";
+                    else if (title.find(": ")  != std::string::npos) split = ": ";
+                    if (!split.empty()) {
+                        size_t p    = title.find(split);
+                        S["Artist"] = title.substr(0, p);
+                        title       = title.substr(p + split.length());
+                        size_t end  = title.find_last_not_of(' ');
+                        if (end != std::string::npos) title.erase(end + 1);
+                        S["Title"]  = title;
+                    }
                 }
             } else { // force reset
                 V.ELAPSED   = 0;
                 V.PAUSE     = false;
                 V.STATE     = "stop";
                 V.STOP      = true;
-                S["Artist"] = V.STATION;
                 S["Title"]  = "";
-                S["Album"]  = V.URI;
             }
         }
     }
