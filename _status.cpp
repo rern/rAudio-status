@@ -428,7 +428,6 @@ int status() {
                 }
                 if (V.PLAY) {
                     if (V.ICON != "webradio") { // radiofrance / radioparadise
-                        if (!V.STATION.empty()) V.EXT = V.STATION.substr(V.STATION.find(" - ") + 3);
                         if (fs::exists(DIR.SHM +"radio")) {
                             std::string status = fileContent(DIR.SHM +"status");
                             kv2var(status);
@@ -461,6 +460,7 @@ int status() {
                     VECTOR = fileContentLines(file.path().string());
                     if (VECTOR.size()) {
                         V.STATION = VECTOR[0];
+                        if (V.ICON != "webradio") V.EXT = V.STATION.substr(V.STATION.find(" - ") + 3);
                         if (VECTOR.size() > 1) V.SAMPLING = VECTOR[1];
                         if (V.SAMPLING.empty() && V.PLAY) {
                             samplingString();

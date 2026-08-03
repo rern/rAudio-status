@@ -1,4 +1,3 @@
-// g++ -O2 websocket.cpp -o websocket
 #pragma once
 
 #include <arpa/inet.h>
