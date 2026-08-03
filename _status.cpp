@@ -107,8 +107,6 @@ void kv2var(const std::string& kv) {
 }
 void radioArtistTitle() {
     std::string title = S["Title"];
-    if (title.empty()) return;
-
     std::string split;
          if (title.find(" - ") != std::string::npos) split = " - ";
     else if (title.find(": ")  != std::string::npos) split = ": ";
@@ -408,6 +406,7 @@ int status() {
         } else {
             V.WEBRADIO = true;
             if (V.URI.ends_with("#charset")) V.URI.resize(V.URI.length() - 8);
+            bool rp_rf      = false;
             std::string url = V.URI;
             std::string dir_radio;
             if (V.URI_INI == "rtsp") {
@@ -421,31 +420,15 @@ int status() {
                 std::replace(url.begin(), url.end(), '/', '|');
                 if (url.find("icecast.radiofrance.fr") != std::string::npos) {
                     V.ICON = "radiofrance";
+                    rp_rf  = true;
                 } else if (url.find("stream.radioparadise.com") != std::string::npos) {
                     V.ICON = "radioparadise";
+                    rp_rf  = true;
                 } else {
                     V.ICON = "webradio";
                 }
-                if (V.PLAY) {
-                    if (V.ICON != "webradio") { // radiofrance / radioparadise
-                        if (fs::exists(DIR.SHM +"radio")) {
-                            std::string status = fileContent(DIR.SHM +"status");
-                            kv2var(status);
-                        } else {
-                            std::string cmd = "systemctl start "+ std::string(V.EXT == "DAB" ? "dab" : "radio") +" &> /dev/null &";
-                            std::system(cmd.c_str());
-                        }
-                    } else {
-                        radioArtistTitle();
-                    }
-                } else { // force reset
-                    V.ELAPSED  = 0;
-                    V.PAUSE    = false;
-                    V.STATE    = "stop";
-                    V.STOP     = true;
-                    S["Title"] = "";
-                }
             }
+            
             if (V.COVER) {
                 for (const std::string& x : {".jpg", ".png", ".gif"}) {
                     std::string f = DIR.DATA + dir_radio +"img/"+ url + x;
@@ -455,12 +438,13 @@ int status() {
                     }
                 }
             }
+            
             for (const auto& file : fs::recursive_directory_iterator(DIR.DATA + dir_radio)) {
                 if (file.is_regular_file() && file.path().filename() == url) {
                     VECTOR = fileContentLines(file.path().string());
                     if (VECTOR.size()) {
                         V.STATION = VECTOR[0];
-                        if (V.ICON != "webradio") V.EXT = V.STATION.substr(V.STATION.find(" - ") + 3);
+                        if (rp_rf) V.EXT = V.STATION.substr(V.STATION.find(" - ") + 3);
                         if (VECTOR.size() > 1) V.SAMPLING = VECTOR[1];
                         if (V.SAMPLING.empty() && V.PLAY) {
                             samplingString();
@@ -470,6 +454,31 @@ int status() {
                     }
                     break;
                 }
+            }
+            
+            if (V.PLAY) {
+                if (rp_rf) { // radioparadise / radiofrance
+                    if (fs::exists(DIR.SHM +"radio")) {
+                        std::string status = fileContent(DIR.SHM +"status");
+                        kv2var(status);
+                    } else {
+                        std::string cmd = "systemctl start "+ std::string(V.EXT == "DAB" ? "dab" : "radio") +" &> /dev/null &";
+                        std::system(cmd.c_str());
+                    }
+                } else if (S["Title"].empty()) {
+                    S["Artist"] = V.STATION;
+                    S["Album"]  = V.URI;
+                } else {
+                    radioArtistTitle();
+                }
+            } else { // force reset
+                V.ELAPSED   = 0;
+                V.PAUSE     = false;
+                V.STATE     = "stop";
+                V.STOP      = true;
+                S["Artist"] = V.STATION;
+                S["Title"]  = "";
+                S["Album"]  = V.URI;
             }
         }
     }
