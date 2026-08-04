@@ -107,26 +107,23 @@ static void print_release(xmlXPathContextPtr ctx, xmlNodePtr release_node) {
 }
 
 int main(int argc, char **argv) {
-    if (argc > 1) {
-        STDOUT = true;
-        DISCID = argv[1]; // example: I5l9cCSFccLKFEKS.7wqSZAorPU-
-    } else {
-        DiscId *disc = discid_new();
-        if (discid_read_sparse(disc, nullptr, 0) == 0) {
-            std::cerr << "Error reading disc: " << discid_get_error_msg(disc) << "\n";
-            discid_free(disc);
-            return 1;
-        }
-
-        DISCID = discid_get_id(disc);
+    DiscId *disc = discid_new();
+    if (discid_read_sparse(disc, nullptr, 0) == 0) {
+        std::cerr << "Error reading disc: " << discid_get_error_msg(disc) << "\n";
         discid_free(disc);
+        return 1;
     }
+
+    DISCID = discid_get_id(disc);
+    discid_free(disc);
+    if (DISCID.empty()) {
+        std::cerr << "Failed: no discid." << err << "\n";
+        return 1;
+    }
+    
     FILE_ID = "/srv/http/data/audiocd/"+ DISCID;
     if (std::filesystem::exists(FILE_ID)) {
-        std::ifstream f(FILE_ID);
-        std::stringstream buffer;
-        buffer << f.rdbuf();
-        std::cout << buffer.str();
+        std::cout << DISCID << '\n';
         return 0;
     }
     
@@ -137,7 +134,7 @@ int main(int argc, char **argv) {
     bool ok = http_get(url, response, err);
 
     if (!ok) {
-        std::cerr << "MusicBrainz lookup failed: " << err << "\n";
+        std::cerr << "Failed: MusicBrainz lookup." << err << "\n";
         curl_global_cleanup();
         return 1;
     }
@@ -145,7 +142,7 @@ int main(int argc, char **argv) {
     xmlDocPtr doc = xmlReadMemory(response.c_str(), static_cast<int>(response.size()),
                                    "response.xml", nullptr, 0);
     if (!doc) {
-        std::cerr << "Failed to parse XML response.\n";
+        std::cerr << "Failed: parse XML response.\n";
         curl_global_cleanup();
         return 1;
     }
@@ -157,7 +154,7 @@ int main(int argc, char **argv) {
         BAD_CAST "/mb:metadata/mb:disc/mb:release-list/mb:release", ctx);
 
     if (!releases || !releases->nodesetval || releases->nodesetval->nodeNr == 0) {
-        std::cerr << "No matching releases found in MusicBrainz.\n";
+        std::cerr << "Failed: Data not found.";
         return 1;
     }
     
