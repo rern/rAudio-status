@@ -97,28 +97,34 @@ static void print_release(xmlXPathContextPtr ctx, xmlNodePtr release_node) {
     }
     if (tracks) xmlXPathFreeObject(tracks);
     
+    std::ofstream f(FILE_ID);
+    if (f) f << data;
+    
     if (STDOUT) {
         std::cout << data;
-     } else {
-        std::ofstream f(FILE_ID);
-        if (f) f << data;
+    } else {
         std::cout << DISCID << '\n';
-     }
+    }
 }
 
 int main(int argc, char **argv) {
-    DiscId *disc = discid_new();
-    if (discid_read_sparse(disc, nullptr, 0) == 0) {
-        std::cerr << "Error reading disc: " << discid_get_error_msg(disc) << "\n";
-        discid_free(disc);
-        return 1;
-    }
+    if (argc > 1) {
+        STDOUT = true;
+        DISCID = argv[1]; // example: I5l9cCSFccLKFEKS.7wqSZAorPU-
+    } else {
+        DiscId *disc = discid_new();
+        if (discid_read_sparse(disc, nullptr, 0) == 0) {
+            std::cerr << "Error reading disc: " << discid_get_error_msg(disc) << "\n";
+            discid_free(disc);
+            return 1;
+        }
 
-    DISCID = discid_get_id(disc);
-    discid_free(disc);
-    if (DISCID.empty()) {
-        std::cerr << "Failed: no discid." << err << "\n";
-        return 1;
+        DISCID = discid_get_id(disc);
+        discid_free(disc);
+        if (DISCID.empty()) {
+            std::cerr << "Failed: no discid." << "\n";
+            return 1;
+        }
     }
     
     FILE_ID = "/srv/http/data/audiocd/"+ DISCID;
