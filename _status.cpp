@@ -418,7 +418,7 @@ int status() {
                     VECTOR = fileContentLines(file.path().string());
                     if (VECTOR.size()) {
                         V.STATION = VECTOR[0];
-                        if (rp_rf) V.EXT = V.STATION.substr(V.STATION.find(" - ") + 3);
+                        if (rp_rf && V.PLAY) V.EXT = V.STATION.substr(V.STATION.find(" - ") + 3);
                         if (VECTOR.size() > 1) V.SAMPLING = VECTOR[1];
                         if (V.SAMPLING.empty() && V.PLAY) {
                             samplingString();
