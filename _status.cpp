@@ -370,10 +370,19 @@ int status() {
         V.EXT      = "CD";
         V.ICON     = "audiocd";
         V.SAMPLING = "16 bit 44.1 kHz 1.41 Mbit/s";
-        std::string
-            discid = fileContent(DIR.SHM +"audiocd"),
-            track  = V.URI.substr(V.URI.find("://") + 3); // cdda://N > N
-        kv2var(fileContent(DIR.DATA +"audiocd/"+ discid +'/'+ track));
+        
+        std::string discid, line, track;
+        discid     = fileContent(DIR.SHM +"discid");
+        if (!discid.empty()) {
+            VECTOR      = fileContentLines(DIR.DATA +"audiocd/"+ discid); // 0:discid, 1:Artist, 2:Album, N+2:Time Title, ...
+            track       = V.URI.substr(V.URI.find("://") + 3); // cdda://N > N
+            line        = VECTOR[stoi(track) + 2];
+            size_t p    = line.find(' '); // Time Title
+            S["Artist"] = VECTOR[1];
+            S["Album"]  = VECTOR[2];
+            I["Time"]   = std::stoi(line.substr(0, p));
+            S["Title"]  = line.substr(p + 1);
+        }
     } else if (V.STREAM) {
         if (V.UPNP) {
             V.EXT      = "UPnP";
