@@ -110,7 +110,8 @@ static void print_release(xmlXPathContextPtr ctx, xmlNodePtr release_node) {
 int main(int argc, char **argv) {
     if (argc > 1) {
         STDOUT = true;
-        DISCID = argv[1]; // example: I5l9cCSFccLKFEKS.7wqSZAorPU-
+        DISCID = argv[1];
+        if (DISCID == "x") DISCID = "I5l9cCSFccLKFEKS.7wqSZAorPU-"; // example: Nirvana - Nevermind 
     } else {
         DiscId *disc = discid_new();
         if (discid_read_sparse(disc, nullptr, 0) == 0) {

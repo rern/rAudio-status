@@ -21,29 +21,36 @@ bool hasData(const std::string& k) {
 }
 
 void fileCover(const std::string& file) {
-    fs::path pathObj(file);
-    std::string directory = pathObj.parent_path().string();
+    bool is_dir = false;
+    std::string directory;
+    fs::path path(file);
+    if (fs::is_regular_file(path)) {
+        directory = path.parent_path().string();
+    } else {
+        is_dir    = true;
+        directory = file;
+    }
     if (!fs::exists(directory)) return;
 
     // static unordered_set - allocated only once in memory
     static const std::unordered_set<std::string> names = {"cover", "album", "folder", "front"};
     static const std::unordered_set<std::string> exts  = {".jpg", ".png", ".gif"};
     std::string w;
-    for (const auto& entry : fs::directory_iterator(directory)) {
-        if (!entry.is_regular_file()) continue;
+    for (const auto& file : fs::directory_iterator(directory)) {
+        if (!file.is_regular_file()) continue;
 
-        w = entry.path().extension().string(); // name[.ext]
+        w = file.path().extension().string(); // name[.ext]
         if (!exts.count(w)) continue; // O(1)
 
-        w = entry.path().stem().string(); // [name].ext
-        if (names.count(w)) V.COVERART = entry.path().string();
+        w = file.path().stem().string(); // [name].ext
+        if (names.count(w)) V.COVERART = file.path().string();
     }
-    if (!V.COVERART.empty()) return;
+    if (!V.COVERART.empty() || is_dir) return;
     
     std::string file_embedded;
-    if (V.GET_COVER) {
+    if (access(directory.c_str(), W_OK) == 0) {
         file_embedded = directory +"/cover"; // extract to .../cover.jpg(png)
-    } else {
+    } else { // fallback if not writeable
         file_embedded = fileEmbedded(file); // get already extracted
         for (const std::string& ext : {".jpg", ".png"}) {
              if (fs::exists("/srv/http"+ file_embedded + ext)) {
@@ -595,8 +602,8 @@ int main(int argc, char **argv) {
     if (ARGV1 == "-C") {
         std::string file = argv[2];
         if (argc > 3) {
-            S["Artist"]      = argv[3];
-            S["Album"]       = argv[4];
+            S["Artist"] = argv[3];
+            S["Album"]  = argv[4];
         } else {
             V.GET_COVER = true;
         }
@@ -678,10 +685,10 @@ int main(int argc, char **argv) {
         << "  -B    broadcast\n"
         << "  -W    send - wait for reply\n\n"
 
-        << "Embedded coverart: " << argv[0] << " -C SOURCE_FILE ARTIST ALBUM\n"
+        << "Coverart: " << argv[0] << " -C SOURCE_FILE/DIR\n"
         << "        1. file     : {cover, album, folder, front} + ext: {jpg, png, gif}\n"
-        << "        2. embedded : extract to /data/shm/embedded/ARTIST_ALBUM.jpg(png)\n"
-        << "        3. online   : status-coverartonline.sh\n\n"
+        << "        2. embedded : if file not found and SOURCE_FILE not SOURCE_DIR,\n"
+        << "                      extract as cover.jpg(png) in the same directory.\n\n"
 
         << "Embedded lyrics: " << argv[0] << " -L SOURCE_FILE\n\n"
 

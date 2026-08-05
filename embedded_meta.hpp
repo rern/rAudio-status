@@ -686,8 +686,8 @@ std::string extractEmbedded(AudioData& AD, const AudioEmbedded& AE, const bool& 
         if (!AE.hasArt || AE.artSize == 0) return {};
 
         file_embedded += AE.mimeType.find("png") != std::string::npos ? ".png" : ".jpg";
-        std::string file_target = V.GET_COVER ? file_embedded : "/srv/http/" + file_embedded;
-        std::ofstream file_out(file_target, std::ios::binary);
+        if (!V.GET_COVER) file_embedded = "/srv/http/" + file_embedded;
+        std::ofstream file_out(file_embedded, std::ios::binary);
         if (!file_out) return {};
 
         if (AE.artOffset == 0 && !AE.pendingArtBase64.empty()) {
