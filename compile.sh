@@ -4,6 +4,8 @@
 
 SECONDS=0
 
+arch=aarch64
+file_bin=status
 if [[ -e /boot/kernel.img ]]; then
 	arch=armv6h
 	file_bin=_status
@@ -11,11 +13,12 @@ if [[ -e /boot/kernel.img ]]; then
 -Wno-psabi
 -idirafter /usr/include
 '
-else
-	[[ -e /boot/kernel7.img ]] && arch=armv7h || arch=aarch64
-	file_bin=status
+elif [[ -e /boot/kernel7.img ]]; then
+	arch=armv7h
+	opt='
+-Wno-psabi
+'
 fi
-     #strip
 opt="
 $( [[ ! $1 ]] && echo -O2 )
 $opt
