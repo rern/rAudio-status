@@ -35,15 +35,18 @@ void fileCover(const std::string& file) {
     // static unordered_set - allocated only once in memory
     static const std::unordered_set<std::string> names = {"cover", "album", "folder", "front"};
     static const std::unordered_set<std::string> exts  = {".jpg", ".png", ".gif"};
-    std::string w;
+    std::string wildcard;
     for (const auto& file : fs::directory_iterator(directory)) {
         if (!file.is_regular_file()) continue;
 
-        w = file.path().extension().string(); // name[.ext]
-        if (!exts.count(w)) continue; // O(1)
+        wildcard = file.path().extension().string(); // name[.ext]
+        if (!exts.count(wildcard)) continue; // O(1)
 
-        w = file.path().stem().string(); // [name].ext
-        if (names.count(w)) V.COVERART = file.path().string();
+        wildcard = file.path().stem().string(); // [name].ext
+        if (names.count(wildcard)) {
+            V.COVERART = file.path().string();
+            break;
+        }
     }
     if (!V.COVERART.empty() || is_dir) return;
     
@@ -378,17 +381,19 @@ int status() {
         V.ICON     = "audiocd";
         V.SAMPLING = "16 bit 44.1 kHz 1.41 Mbit/s";
         
-        std::string discid, line, track;
+        std::string dir, discid, line, track;
         discid     = fileContent(DIR.SHM +"discid");
         if (!discid.empty()) {
-            VECTOR      = fileContentLines(DIR.DATA +"audiocd/"+ discid); // 0:discid, 1:Artist, 2:Album, N+2:Time Title, ...
-            track       = V.URI.substr(V.URI.find("://") + 3); // cdda://N > N
-            line        = VECTOR[stoi(track) + 2];
-            size_t p    = line.find(' '); // Time Title
+            dir         = DIR.DATA +"audiocd/"+ discid +"/";
+            VECTOR      = fileContentLines(dir +"data");       // 0:Artist, 1:Album, N+1:Time Title, ...
+            S["Album"]  = VECTOR[0];
             S["Artist"] = VECTOR[1];
-            S["Album"]  = VECTOR[2];
+            track       = V.URI.substr(V.URI.find("://") + 3); // cdda://N > N
+            line        = VECTOR[stoi(track) + 1];
+            size_t p    = line.find(' ');
             I["Time"]   = std::stoi(line.substr(0, p));
             S["Title"]  = line.substr(p + 1);
+            fileCover(dir);
         }
     } else if (V.STREAM) {
         if (V.UPNP) {
