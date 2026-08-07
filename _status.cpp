@@ -482,8 +482,11 @@ int status() {
 
     if (V.SAMPLING.empty()) samplingString();
     V.SAMPLING += V.SAMPLING.empty() ? V.EXT : " • "+ V.EXT;
-    if (V.PLLENGTH > 1) V.SAMPLING = std::format("{}/{} • {}", V.POS + 1, V.PLLENGTH, V.SAMPLING);
-
+    if (V.PLLENGTH > 1) {
+        std::string pos = std::to_string(V.POS + 1) +"/"+ std::to_string(V.PLLENGTH) +" • ";
+        V.SAMPLING      = pos + V.SAMPLING;
+    }
+    
     if (V.COVER &&
         V.COVERART.empty() &&
         !S["Artist"].empty() &&
