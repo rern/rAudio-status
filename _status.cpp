@@ -384,8 +384,8 @@ int status() {
         std::string dir, discid, line, track;
         discid     = fileContent(DIR.SHM +"discid");
         if (!discid.empty()) {
-            dir         = DIR.DATA +"audiocd/"+ discid +"/";
-            VECTOR      = fileContentLines(dir +"data");       // 0:Artist, 1:Album, N+1:Time Title, ...
+            dir         = DIR.DATA +"audiocd/"+ discid;
+            VECTOR      = fileContentLines(dir +"/data");       // 0:Artist, 1:Album, N+1:Time Title, ...
             S["Album"]  = VECTOR[0];
             S["Artist"] = VECTOR[1];
             track       = V.URI.substr(V.URI.find("://") + 3); // cdda://N > N
@@ -424,32 +424,28 @@ int status() {
                 }
             }
             
-            if (V.COVER) {
-                for (const std::string& x : {".jpg", ".png", ".gif"}) {
-                    std::string f = DIR.DATA + dir_radio +"img/"+ url + x;
-                    if (fs::exists(f)) {
-                        V.STATIONCOVER = f.substr(9);
-                        break;
-                    }
-                }
-            }
-            
-            for (const auto& file : fs::recursive_directory_iterator(DIR.DATA + dir_radio)) {
-                if (file.is_regular_file() && file.path().filename() == url) {
-                    VECTOR = fileContentLines(file.path().string());
+            for (const auto& dir : fs::recursive_directory_iterator(DIR.DATA + dir_radio)) {
+                if (dir.is_directory() && dir.path().filename() == url) {
+                    std::string path = dir.path().string();
+                    VECTOR = fileContentLines(path +"/data");
                     if (VECTOR.size()) {
                         V.STATION = VECTOR[0];
                         if (rp_rf && V.PLAY) V.EXT = V.STATION.substr(V.STATION.find(" - ") + 3);
                         if (VECTOR.size() > 1) V.SAMPLING = VECTOR[1];
                         if (V.SAMPLING.empty() && V.PLAY) {
                             samplingString();
-                            std::ofstream f(file.path());
+                            std::ofstream f(dir.path());
                             if (f) f << V.STATION << '\n' << V.SAMPLING << '\n';
                         }
+                    }
+                    if (V.COVER) {
+                        fileCover(path);
+                        if (!V.COVERART.empty()) V.COVERART.erase(0, 9);
                     }
                     break;
                 }
             }
+            
             
             if (V.PLAY) {
                 if (rp_rf) { // radioparadise / radiofrance
