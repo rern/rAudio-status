@@ -117,10 +117,12 @@ void kv2var(const std::string& kv) {
 }
 
 void samplingString() {
+    if (!V.SAMPLERATE) return;
+    
     if (V.BITDEPTH == 1) { // dsd
         uint32_t base = (V.SAMPLERATE % 48000 == 0) ? 48000 : 44100;
         V.SAMPLING    = std::format("DSD{} {:.3f} MHz", V.SAMPLERATE / base, V.SAMPLERATE / 1000000.0);
-    } else if (V.SAMPLERATE) {
+    } else {
         V.SAMPLING    = std::format("{}bit {:.0f} kHz", V.BITDEPTH, V.SAMPLERATE / 1000.0);
         if (V.BITRATE)    V.SAMPLING += std::format(" {} kbit/s", V.BITRATE);
     }
