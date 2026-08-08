@@ -116,16 +116,18 @@ void kv2var(const std::string& kv) {
     }
 }
 
-void samplingString() {
-    if (!V.SAMPLERATE) return;
+std::string samplingString() {
+    if (!V.SAMPLERATE) return {};
     
+    std::string sampling;
     if (V.BITDEPTH == 1) { // dsd
         uint32_t base = (V.SAMPLERATE % 48000 == 0) ? 48000 : 44100;
-        V.SAMPLING    = std::format("DSD{} {:.3f} MHz", V.SAMPLERATE / base, V.SAMPLERATE / 1000000.0);
+        sampling      = std::format("DSD{} {:.3f} MHz", V.SAMPLERATE / base, V.SAMPLERATE / 1000000.0);
     } else {
-        V.SAMPLING    = std::format("{}bit {:.0f} kHz", V.BITDEPTH, V.SAMPLERATE / 1000.0);
-        if (V.BITRATE)    V.SAMPLING += std::format(" {} kbit/s", V.BITRATE);
+        sampling      = std::format("{} bit {:.0f} kHz", V.BITDEPTH, V.SAMPLERATE / 1000.0);
+        if (V.BITRATE > 0) sampling += std::format(" {} kbit/s", V.BITRATE);
     }
+    return sampling;
 }
 
 void statusFormat(const std::string& k, const std::string& v) {
@@ -426,28 +428,35 @@ int status() {
                 }
             }
             
-            for (const auto& dir : fs::recursive_directory_iterator(DIR.DATA + dir_radio)) {
-                if (dir.is_directory() && dir.path().filename() == url) {
-                    std::string path = dir.path().string();
-                    VECTOR = fileContentLines(path +"/data");
-                    if (VECTOR.size()) {
-                        V.STATION = VECTOR[0];
-                        if (rp_rf && V.PLAY) V.EXT = V.STATION.substr(V.STATION.find(" - ") + 3);
-                        if (VECTOR.size() > 1) V.SAMPLING = VECTOR[1];
-                        if (V.SAMPLING.empty() && V.PLAY) {
-                            samplingString();
-                            std::ofstream f(dir.path());
-                            if (f) f << V.STATION << '\n' << V.SAMPLING << '\n';
+            std::string dir;
+            std::ifstream file_radio(DIR.DATA +"/mpd/radio");
+            while (std::getline(file_radio, dir)) {
+                if (dir.ends_with(url)) break;
+                
+                dir = "";
+            }
+            if (!dir.empty() && fs::exists(dir)) {
+                VECTOR = fileContentLines(dir +"/data");
+                V.STATION = VECTOR[0];
+                if (rp_rf && V.PLAY) V.EXT = V.STATION.substr(V.STATION.find(" - ") + 3);
+                if (VECTOR.size() > 1) V.SAMPLING = VECTOR[1];
+                if (V.SAMPLING.empty() && V.PLAY) {
+                    V.SAMPLING = samplingString();
+                    if (!V.SAMPLING.empty()) {
+                        std::ofstream file_data(dir +"data");
+                        if (file_data) {
+                            std::string data = V.STATION +"\n"+
+                                               V.SAMPLING.substr(0, V.SAMPLING.find("Hz")) +"\n";
+                            if (VECTOR.size() > 2) data += VECTOR[2] +"\n";
+                            file_data << data;
                         }
                     }
-                    if (V.COVER) {
-                        fileCover(path);
-                        if (!V.COVERART.empty()) V.COVERART.erase(0, 9);
-                    }
-                    break;
+                }
+                if (V.COVER) {
+                    fileCover(dir);
+                    if (!V.COVERART.empty()) V.COVERART.erase(0, 9); // /srv/http...
                 }
             }
-            
             
             if (V.PLAY) {
                 if (rp_rf) { // radioparadise / radiofrance
@@ -482,13 +491,13 @@ int status() {
         }
     }
 
-    if (V.PLAYER == "mpd") {
-        if (V.SAMPLING.empty()) samplingString();
-        V.SAMPLING += V.SAMPLING.empty() ? V.EXT : " • "+ V.EXT;
-        if (V.PLLENGTH > 1) V.SAMPLING = std::format("{}/{} • {}", V.POS + 1, V.PLLENGTH, V.SAMPLING);
+    if (V.MPD && V.SAMPLING.empty()) V.SAMPLING = samplingString();
+    if (V.SAMPLING.empty()) {
+        V.SAMPLING  = V.EXT;
     } else {
-        V.SAMPLING += V.SAMPLING.empty() ? V.EXT : " • "+ V.EXT;
+        V.SAMPLING += " • "+ V.EXT;
     }
+    if (V.MPD && V.PLLENGTH > 1) V.SAMPLING = std::format("{}/{} • {}", V.POS + 1, V.PLLENGTH, V.SAMPLING);
     
     if (V.COVER &&
         V.COVERART.empty() &&

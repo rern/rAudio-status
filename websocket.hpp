@@ -5,7 +5,7 @@
 #include <sys/socket.h>
 
 constexpr int PORT_WS  = 8080;
-constexpr int PORT_UDP = 9000;
+constexpr int PORT_UDP = 9001;
 constexpr int TIMEOUT_MS = 1000;
 
 std::string wsSend(const std::string& ws_ip, std::string msg) {
