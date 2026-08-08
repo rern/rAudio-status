@@ -25,15 +25,15 @@
 
 namespace fs = std::filesystem;
 
-struct DIR {
+struct Dir {
     std::string
         DATA   = "/srv/http/data/",
         MPD    = DATA +"mpd/",
         SHM    = DATA +"shm/",
         SYSTEM = DATA +"system/";
-}
+};
 
-struct V {
+struct Var {
     bool
         COVER       = true,
         GET_COVER   = false,
@@ -87,7 +87,8 @@ struct V {
         FILE;
 };
 
-DIR, V;
+Dir DIR;
+Var V;
 
 std::unordered_map<std::string, bool>        B;
 std::unordered_map<std::string, std::string> S;
