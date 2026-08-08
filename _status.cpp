@@ -120,8 +120,8 @@ void samplingString() {
     if (V.BITDEPTH == 1) { // dsd
         uint32_t base = (V.SAMPLERATE % 48000 == 0) ? 48000 : 44100;
         V.SAMPLING    = std::format("DSD{} {:.3f} MHz", V.SAMPLERATE / base, V.SAMPLERATE / 1000000.0);
-    } else {
-        if (V.SAMPLERATE) V.SAMPLING += std::format("{}bit {:.0f} kHz", V.BITDEPTH, V.SAMPLERATE / 1000.0);
+    } else if (V.SAMPLERATE) {
+        V.SAMPLING    = std::format("{}bit {:.0f} kHz", V.BITDEPTH, V.SAMPLERATE / 1000.0);
         if (V.BITRATE)    V.SAMPLING += std::format(" {} kbit/s", V.BITRATE);
     }
 }
@@ -480,11 +480,12 @@ int status() {
         }
     }
 
-    if (V.SAMPLING.empty()) samplingString();
-    V.SAMPLING += V.SAMPLING.empty() ? V.EXT : " • "+ V.EXT;
-    if (V.PLAYER == "mpd" && V.PLLENGTH > 1) {
-        std::string pos = std::to_string(V.POS + 1) +"/"+ std::to_string(V.PLLENGTH) +" • ";
-        V.SAMPLING      = pos + V.SAMPLING;
+    if (V.PLAYER == "mpd") {
+        if (V.SAMPLING.empty()) samplingString();
+        V.SAMPLING += V.SAMPLING.empty() ? V.EXT : " • "+ V.EXT;
+        if (V.PLLENGTH > 1) V.SAMPLING = std::format("{}/{} • {}", V.POS + 1, V.PLLENGTH, V.SAMPLING);
+    } else {
+        V.SAMPLING += V.SAMPLING.empty() ? V.EXT : " • "+ V.EXT;
     }
     
     if (V.COVER &&
