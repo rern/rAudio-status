@@ -4,8 +4,7 @@
 #include <netinet/in.h>
 #include <sys/socket.h>
 
-constexpr int PORT_WS  = 8080;
-constexpr int PORT_UDP = 9001;
+constexpr int PORT_WS    = 8080;
 constexpr int TIMEOUT_MS = 1000;
 
 std::string wsSend(const std::string& ws_ip, std::string msg) {
@@ -152,18 +151,18 @@ int wsPush(const std::string& ws_ip, std::string msg) {
 int wsBroadcast(const std::string& msg) {
     int sock = socket(AF_INET, SOCK_DGRAM, 0);
     if (sock < 0) return 1;
-
+    
     int broadcastEnable = 1;
     setsockopt(sock, SOL_SOCKET, SO_BROADCAST, &broadcastEnable, sizeof(broadcastEnable));
 
     struct sockaddr_in targetAddr;
     std::memset(&targetAddr, 0, sizeof(targetAddr));
-    targetAddr.sin_family = AF_INET;
-    targetAddr.sin_port = htons(PORT_UDP);
+    targetAddr.sin_family      = AF_INET;
+    int port                   = std::stoi(fileContent(DIR.SYSTEM + "websocket"));
+    targetAddr.sin_port        = htons(port);
     targetAddr.sin_addr.s_addr = inet_addr("255.255.255.255");
 
-    ssize_t bytesSent = sendto(sock, msg.c_str(), msg.length(), 0,
-                               (struct sockaddr*)&targetAddr, sizeof(targetAddr));
+    ssize_t bytesSent          = sendto(sock, msg.c_str(), msg.length(), 0, (struct sockaddr*)&targetAddr, sizeof(targetAddr));
     
     close(sock);
     return 0;

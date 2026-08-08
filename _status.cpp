@@ -326,11 +326,10 @@ int status() {
     else if (V.PLAYER == "upnp")      V.UPNP      = true;
 
     if (V.MPD || V.UPNP) {
-        std::string dir_mpd = DIR.DATA +"mpd";
         struct statfs buf;
-        if (fs::is_symlink(dir_mpd) && statfs(dir_mpd.c_str(), &buf) != 0) {
+        if (fs::is_symlink(DIR.MPD) && statfs(DIR.MPD.c_str(), &buf) != 0) {
             std::system("timeout 1 mount -a &> /dev/null");
-            if (statfs(dir_mpd.c_str(), &buf) != 0) {
+            if (statfs(DIR.MPD.c_str(), &buf) != 0) {
                 std::cerr << "Shared Data server not found.\n";
                 return 1;
             }
@@ -429,7 +428,7 @@ int status() {
             }
             
             std::string dir;
-            std::ifstream file_radio(DIR.DATA +"/mpd/radio");
+            std::ifstream file_radio(DIR.MPD +"radio");
             while (std::getline(file_radio, dir)) {
                 if (dir.ends_with(url)) break;
                 
@@ -576,7 +575,7 @@ int status() {
                     fileContent(DIR.SYSTEM +"display.json").substr(2); // "{\n" remove
 
         std::cout
-            << ", \"counts\"    : " << fileContent(DIR.DATA +"mpd/counts") << '\n'
+            << ", \"counts\"    : " << fileContent(DIR.MPD +"counts") << '\n'
             << ", \"display\"   : " << display << '\n';
     }
 

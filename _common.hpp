@@ -25,7 +25,15 @@
 
 namespace fs = std::filesystem;
 
-struct Global {
+struct DIR {
+    std::string
+        DATA   = "/srv/http/data/",
+        MPD    = DATA +"mpd/",
+        SHM    = DATA +"shm/",
+        SYSTEM = DATA +"system/";
+}
+
+struct V {
     bool
         COVER       = true,
         GET_COVER   = false,
@@ -73,17 +81,13 @@ struct Global {
         STATIONCOVER,
         URI,
         URI_INI,
-        WS_STATUS,
-
-        DATA   = "/srv/http/data/",
-        SHM    = DATA +"shm/",
-        SYSTEM = DATA +"system/";
+        WS_STATUS;
 
     fs::path
         FILE;
 };
 
-Global DIR, V;
+DIR, V;
 
 std::unordered_map<std::string, bool>        B;
 std::unordered_map<std::string, std::string> S;
