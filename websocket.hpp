@@ -154,11 +154,11 @@ int wsBroadcast(const std::string& msg) {
     
     int broadcastEnable = 1;
     setsockopt(sock, SOL_SOCKET, SO_BROADCAST, &broadcastEnable, sizeof(broadcastEnable));
-
+    std::string p       = fileContent(DIR.SYSTEM + "websocket");
+    int port            = p.empty() ? 9001 : std::stoi(p);
     struct sockaddr_in targetAddr;
     std::memset(&targetAddr, 0, sizeof(targetAddr));
     targetAddr.sin_family      = AF_INET;
-    int port                   = std::stoi(fileContent(DIR.SYSTEM + "websocket"));
     targetAddr.sin_port        = htons(port);
     targetAddr.sin_addr.s_addr = inet_addr("255.255.255.255");
 
