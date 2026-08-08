@@ -482,7 +482,7 @@ int status() {
 
     if (V.SAMPLING.empty()) samplingString();
     V.SAMPLING += V.SAMPLING.empty() ? V.EXT : " • "+ V.EXT;
-    if (V.PLLENGTH > 1) {
+    if (V.PLAYER == "mpd" && V.PLLENGTH > 1) {
         std::string pos = std::to_string(V.POS + 1) +"/"+ std::to_string(V.PLLENGTH) +" • ";
         V.SAMPLING      = pos + V.SAMPLING;
     }
