@@ -6,6 +6,7 @@
 
 constexpr int PORT_WS    = 8080;
 constexpr int TIMEOUT_MS = 1000;
+constexpr int UDP_PORT   = 9001;
 
 std::string wsSend(const std::string& ws_ip, std::string msg) {
     msg = (!msg.empty() && msg.front() == '{') ? msg : "\"" + msg + "\"";
@@ -148,18 +149,16 @@ int wsPush(const std::string& ws_ip, std::string msg) {
     return 0;
 }
 
-int wsBroadcast(const std::string& msg) {
+int wsBroadcast(const std::string& msg) { // send datagram(udp) to all remote websocket.py asyncio.DatagramProtocol
     int sock = socket(AF_INET, SOCK_DGRAM, 0);
     if (sock < 0) return 1;
     
     int broadcastEnable = 1;
     setsockopt(sock, SOL_SOCKET, SO_BROADCAST, &broadcastEnable, sizeof(broadcastEnable));
-    std::string p       = fileContent(DIR.SYSTEM + "websocket");
-    int port            = p.empty() ? 9001 : std::stoi(p);
     struct sockaddr_in targetAddr;
     std::memset(&targetAddr, 0, sizeof(targetAddr));
     targetAddr.sin_family      = AF_INET;
-    targetAddr.sin_port        = htons(port);
+    targetAddr.sin_port        = htons(UDP_PORT);
     targetAddr.sin_addr.s_addr = inet_addr("255.255.255.255");
 
     ssize_t bytesSent          = sendto(sock, msg.c_str(), msg.length(), 0, (struct sockaddr*)&targetAddr, sizeof(targetAddr));

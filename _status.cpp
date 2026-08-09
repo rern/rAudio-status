@@ -601,6 +601,11 @@ int main(int argc, char **argv) {
     std::string ARGV1 = argv[1];
 
     if (ARGV1 == "-B") return wsBroadcast(argv[2]);
+    
+    if (ARGV1 == "-Bp") {
+        std::cout << UDP_PORT << '\n';
+        return 0;
+    }
 
     if (ARGV1 == "-I") {
         std::string inf;
