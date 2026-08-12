@@ -34,7 +34,7 @@ g++ $opt
 
 [[ $? != 0 ]] && exit
 
-mv /srv/http/bash/$file_bin{,.bak}
+#mv /srv/http/bash/$file_bin{,.bak}
 cp -f $file_bin /srv/http/bash
 mv $file_bin status.$arch
 

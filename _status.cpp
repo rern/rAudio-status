@@ -44,7 +44,12 @@ void fileCover(const std::string& file) {
 
         wildcard = file.path().stem().string(); // [name].ext
         if (names.count(wildcard)) {
-            V.COVERART = file.path().string();
+            std::string path = file.path().string();
+            if (directory.starts_with(DIR.DATA)) { // /srv/http/data/webradio/...
+                V.STATIONCOVER = path.substr(9);
+            } else {
+                V.COVERART = path;
+            }
             break;
         }
     }
@@ -183,6 +188,7 @@ void rendererStatus() {
     if (V.SNAPCAST) {                // V.SNAPCLIENT js: REFRESHDATA() > PLAYBACK.get()
         std::string ip = fileContent(DIR.SHM +"snapserverip");
         kv = wsSend(ip, "status"); // websocket server status -k > reply key=value
+        S["snapserverip"] = fileContent(DIR.SHM +"snapserverip");
     } else {
         if (V.AIRPLAY) {
             V.EXT = "AirPlay";
@@ -403,9 +409,9 @@ int status() {
             V.EXT      = "UPnP";
         } else {
             V.WEBRADIO = true;
-            if (V.URI.ends_with("#charset")) V.URI.resize(V.URI.length() - 8);
+            size_t p   = V.URI.find("#charset");
+            if (p != std::string::npos) V.URI.erase(p);
             bool rp_rf      = false;
-            std::string url = V.URI;
             std::string dir_radio;
             if (V.URI_INI == "rtsp") {
                 V.EXT      = "DAB";
@@ -415,11 +421,10 @@ int status() {
             } else {
                 V.EXT      = "Radio";
                 dir_radio  = "webradio/";
-                std::replace(url.begin(), url.end(), '/', '|');
-                if (url.find("icecast.radiofrance.fr") != std::string::npos) {
+                if (V.URI.find("icecast.radiofrance.fr") != std::string::npos) {
                     V.ICON = "radiofrance";
                     rp_rf  = true;
-                } else if (url.find("stream.radioparadise.com") != std::string::npos) {
+                } else if (V.URI.find("stream.radioparadise.com") != std::string::npos) {
                     V.ICON = "radioparadise";
                     rp_rf  = true;
                 } else {
@@ -428,15 +433,17 @@ int status() {
             }
             
             std::string dir;
+            std::string line;
             std::ifstream file_radio(DIR.MPD +"radio");
-            while (std::getline(file_radio, dir)) {
-                if (dir.ends_with(url)) break;
-                
-                dir = "";
+            while (std::getline(file_radio, line)) {
+                if (line.starts_with(V.URI +"^^")) {
+                    dir = line.substr(line.find("^^") + 2);
+                    break;
+                }
             }
             if (!dir.empty() && fs::exists(dir)) {
-                VECTOR = fileContentLines(dir +"/data");
-                V.STATION = VECTOR[0];
+                V.STATION = fs::path(dir).filename().string();
+                VECTOR        = fileContentLines(dir +"/data");
                 if (rp_rf && V.PLAY) V.EXT = V.STATION.substr(V.STATION.find(" - ") + 3);
                 if (VECTOR.size() > 1) V.SAMPLING = VECTOR[1];
                 if (V.SAMPLING.empty() && V.PLAY) {
@@ -444,17 +451,16 @@ int status() {
                     if (!V.SAMPLING.empty()) {
                         std::ofstream file_data(dir +"data");
                         if (file_data) {
-                            std::string data = V.STATION +"\n"+
+                            std::string data = V.URI +"\n"+
                                                V.SAMPLING.substr(0, V.SAMPLING.find("Hz")) +"\n";
-                            if (VECTOR.size() > 2) data += VECTOR[2] +"\n";
+                            if (VECTOR.size() > 2) data += VECTOR[2] +"\n"; // charset
                             file_data << data;
                         }
                     }
                 }
-                if (V.COVER) {
-                    fileCover(dir);
-                    if (!V.COVERART.empty()) V.COVERART.erase(0, 9); // /srv/http...
-                }
+                if (V.COVER) fileCover(dir);
+                S["station"]      = V.STATION;
+                S["stationcover"] = V.STATIONCOVER;
             }
             
             if (V.PLAY) {
@@ -520,12 +526,6 @@ int status() {
     S["player"]   = V.PLAYER;
     S["sampling"] = V.SAMPLING;
     S["state"]    = V.STATE;
-    if (V.WEBRADIO) {
-        S["station"]      = V.STATION;
-        S["stationcover"] = V.COVER ? V.STATIONCOVER : "";
-        if (V.STOP) S["Title"] = "";
-    }
-    if (V.SNAPCAST) S["snapserverip"] = fileContent(DIR.SHM +"snapserverip");
 
     B["btsender"]     = fs::exists(DIR.SHM +"btmixer");
     B["librandom"]    = fs::exists(DIR.SYSTEM +"librandom");
@@ -600,13 +600,6 @@ int main(int argc, char **argv) {
 
     std::string ARGV1 = argv[1];
 
-    if (ARGV1 == "-B") return wsBroadcast(argv[2]);
-    
-    if (ARGV1 == "-Bp") {
-        std::cout << UDP_PORT << '\n';
-        return 0;
-    }
-
     if (ARGV1 == "-I") {
         std::string inf;
         if (argc > 2) inf = argv[2];
@@ -644,18 +637,32 @@ int main(int argc, char **argv) {
         return 0;
     }
     
-    if (ARGV1 == "-W" || ARGV1 == "-P") {
-        std::string
-            ip  = "127.0.0.1",
-            msg = "ping";
-        if (argc == 3) {
+    if (ARGV1 == "-Bp") {
+        std::cout << UDP_PORT << '\n';
+        return 0;
+    }
+
+    if (ARGV1 == "-B" || ARGV1 == "-W" || ARGV1 == "-P") {
+        std::string ip = "127.0.0.1";
+        std::string msg;
+        if (argc == 2) { // no message - debug/test
+            if (ARGV1 == "-W") {
+                msg = "status [IP]";
+            } else {
+                std::string type = ARGV1 == "-B" ? "Broadcast to all servers." : "Push to clients of this server.";
+                msg = "{ \"channel\": \"notify\", \"data\": { \"icon\": \"raudio\", \"title\": \"WebSocket\", \"message\": \""+ ARGV1 +"\" } }";
+            }
+            std::cout << "status " << ARGV1 << " " << msg << "\n\n";
+        } else if (argc == 3) { // message
             msg = argv[2];
-        } else if (argc == 4) {
+        } else if (argc == 4) { // ip + message
             char v0 = argv[2][0];
             if (v0 >= '0' && v0 <= '9') {ip  = argv[2]; if (argc > 3) msg = argv[3];}
             else                        {msg = argv[2]; if (argc > 3) ip  = argv[3];}
         }
-        if (ARGV1 == "-P") return wsPush(ip, msg);
+        if (ARGV1 == "-B") return wsBroadcast(msg); // to all servers (then to each clients)
+            
+        if (ARGV1 == "-P") return wsPush(ip, msg);  // to clients of this server
 
         V.WS_STATUS = wsSend(ip, msg);
         if (V.WS_STATUS.empty()) return 1;
@@ -700,7 +707,6 @@ int main(int argc, char **argv) {
 
         << "Websocket: " << argv[0] << " [-W|-P|-B] [IP] [MESSAGE]\n"
         << "        default IP     : 127.0.0.1\n"
-        << "        default MESSAGE: ping\n"
         << "  -P    push - exit immediately\n"
         << "  -B    broadcast\n"
         << "  -W    send - wait for reply\n\n"
