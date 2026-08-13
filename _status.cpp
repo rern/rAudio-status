@@ -122,15 +122,16 @@ void kv2var(const std::string& kv) {
 }
 
 std::string samplingString() {
-    if (!V.SAMPLERATE) return {};
+    if (V.SAMPLERATE == 0) return {};
     
     std::string sampling;
     if (V.BITDEPTH == 1) { // dsd
         uint32_t base = (V.SAMPLERATE % 48000 == 0) ? 48000 : 44100;
         sampling      = std::format("DSD{} {:.3f} MHz", V.SAMPLERATE / base, V.SAMPLERATE / 1000000.0);
     } else {
-        sampling      = std::format("{} bit {:.0f} kHz", V.BITDEPTH, V.SAMPLERATE / 1000.0);
-        if (V.BITRATE > 0) sampling += std::format(" {} kbit/s", V.BITRATE);
+        if (V.BITDEPTH > 0)   sampling  = std::format("{} bit ", V.BITDEPTH);
+                              sampling += std::format("{:.1f} kHz", V.SAMPLERATE / 1000.0);
+        if (V.BITRATE > 0)    sampling += std::format(" {} kbit/s", V.BITRATE);
     }
     return sampling;
 }
@@ -443,20 +444,11 @@ int status() {
             }
             if (!dir.empty() && fs::exists(dir)) {
                 V.STATION = fs::path(dir).filename().string();
-                VECTOR        = fileContentLines(dir +"/data");
                 if (rp_rf && V.PLAY) V.EXT = V.STATION.substr(V.STATION.find(" - ") + 3);
-                if (VECTOR.size() > 1) V.SAMPLING = VECTOR[1];
-                if (V.SAMPLING.empty() && V.PLAY) {
-                    V.SAMPLING = samplingString();
-                    if (!V.SAMPLING.empty()) {
-                        std::ofstream file_data(dir +"data");
-                        if (file_data) {
-                            std::string data = V.URI +"\n"+
-                                               V.SAMPLING.substr(0, V.SAMPLING.find("Hz")) +"\n";
-                            if (VECTOR.size() > 2) data += VECTOR[2] +"\n"; // charset
-                            file_data << data;
-                        }
-                    }
+                if (V.PLAY) V.SAMPLING = samplingString();
+                if (V.SAMPLING.empty()) {
+                    VECTOR = fileContentLines(dir +"/data");
+                    if (VECTOR.size() > 1) V.SAMPLING = VECTOR[1];
                 }
                 if (V.COVER) fileCover(dir);
                 S["station"]      = V.STATION;
@@ -621,9 +613,9 @@ int main(int argc, char **argv) {
             V.GET_COVER = true;
         }
         fileCover(file);
-        if (V.COVERART.empty()) return 1;
-
-        std::cout << V.COVERART << '\n';
+        if (file.starts_with(DIR.DATA)) V.COVERART = V.STATIONCOVER;
+        
+        if (!V.COVERART.empty()) std::cout << V.COVERART << '\n';
         return 0;
     }
 
