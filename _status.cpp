@@ -45,8 +45,9 @@ void fileCover(const std::string& file) {
         wildcard = file.path().stem().string(); // [name].ext
         if (names.count(wildcard)) {
             std::string path = file.path().string();
-            if (directory.starts_with(DIR.DATA)) { // /srv/http/data/webradio/...
-                V.STATIONCOVER = path.substr(9);
+            if (path.starts_with("/srv")) path.erase(0, 9);
+            if (V.WEBRADIO) {
+                V.STATIONCOVER = path;
             } else {
                 V.COVERART = path;
             }
@@ -294,7 +295,7 @@ public:
         V.STREAM  = scheme.count(V.URI_INI) > 0;
         if (V.STOP) {
             V.TIME = mpd_song_get_duration(song);
-            if (!V.STREAM) {
+            if (!V.STREAM && V.URI_INI != "cdda") {
                 AudioData AD = Utils::readFile(V.FILE.c_str(), false);
                 if (!AD.error) {
                     AudioMeta AM = getSampling(AD);
@@ -392,16 +393,16 @@ int status() {
         V.SAMPLING = "16 bit 44.1 kHz 1.41 Mbit/s";
         
         std::string dir, discid, line, track;
-        discid     = fileContent(DIR.SHM +"discid");
+        discid     = fileContent(DIR.SHM +"audiocd");
         if (!discid.empty()) {
             dir         = DIR.DATA +"audiocd/"+ discid;
             VECTOR      = fileContentLines(dir +"/data");       // 0:Artist, 1:Album, N+1:Time Title, ...
             S["Album"]  = VECTOR[0];
             S["Artist"] = VECTOR[1];
-            track       = V.URI.substr(V.URI.find("://") + 3); // cdda://N > N
+            track       = V.URI.substr(V.URI.find(":///") + 4); // cdda:///N > N
             line        = VECTOR[stoi(track) + 1];
             size_t p    = line.find(' ');
-            I["Time"]   = std::stoi(line.substr(0, p));
+            V.TIME      = std::stoi(line.substr(0, p));
             S["Title"]  = line.substr(p + 1);
             fileCover(dir);
         }
@@ -613,8 +614,6 @@ int main(int argc, char **argv) {
             V.GET_COVER = true;
         }
         fileCover(file);
-        if (file.starts_with(DIR.DATA)) V.COVERART = V.STATIONCOVER;
-        
         if (!V.COVERART.empty()) std::cout << V.COVERART << '\n';
         return 0;
     }
