@@ -396,14 +396,24 @@ int status() {
         discid     = fileContent(DIR.SHM +"audiocd");
         if (!discid.empty()) {
             dir         = DIR.DATA +"audiocd/"+ discid;
-            VECTOR      = fileContentLines(dir +"/data");       // 0:Artist, 1:Album, N+1:Time Title, ...
-            S["Album"]  = VECTOR[0];
-            S["Artist"] = VECTOR[1];
             track       = V.URI.substr(V.URI.find(":///") + 4); // cdda:///N > N
+            VECTOR      = fileContentLines(dir +"/data");       // 0:Album, 1:Artist, N+1:Artist^Title^^Time
             line        = VECTOR[stoi(track) + 1];
-            size_t p    = line.find(' ');
-            V.TIME      = std::stoi(line.substr(0, p));
-            S["Title"]  = line.substr(p + 1);
+            std::vector<std::string> data;
+            size_t start = 0;
+            while (true) {
+                size_t p = line.find("^^", start);
+                if (p == std::string::npos) {
+                    data.push_back(line.substr(start));
+                    break;
+                }
+                data.push_back(line.substr(start, p - start));
+                start = p + 2;
+            }
+            S["Album"]  = VECTOR[0];
+            S["Artist"] = data[0];
+            S["Title"]  = data[1];
+            V.TIME      = std::stoi( data[2]);
             fileCover(dir);
         }
     } else if (V.STREAM) {
