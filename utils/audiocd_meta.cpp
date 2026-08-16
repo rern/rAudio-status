@@ -32,6 +32,8 @@ int
     FIRST_TRACK     = 1,
     LAST_TRACK      = 0,
     LEADOUT_SECTORS = 0;
+bool
+    NUM_TRACKS      = false;
     
 std::vector<int> TRACK_OFFSETS;
 
@@ -87,14 +89,15 @@ static bool read_disc_ids(std::string &err) {
     const char *mb_id    = discid_get_id(disc);
     const char *gnudb_id = discid_get_freedb_id(disc); // same TOC, CDDB-style checksum
 
-    MBZ_DISCID    = mb_id    ? mb_id    : "";
-    GDB_DISCID = gnudb_id ? gnudb_id : "";
+    MBZ_DISCID      = mb_id    ? mb_id    : "";
+    GDB_DISCID      = gnudb_id ? gnudb_id : "";
 
     FIRST_TRACK     = discid_get_first_track_num(disc);
     LAST_TRACK      = discid_get_last_track_num(disc);
     LEADOUT_SECTORS = discid_get_sectors(disc);
 
     TRACK_OFFSETS.clear();
+    
     for (int t = FIRST_TRACK; t <= LAST_TRACK; ++t) {
         TRACK_OFFSETS.push_back(discid_get_track_offset(disc, t));
     }
@@ -112,7 +115,7 @@ static bool read_disc_ids(std::string &err) {
 // XPath helpers (MusicBrainz XML response)
 // ---------------------------------------------------------------------
 static std::string xpath_string(xmlXPathContextPtr ctx, xmlNodePtr node, const char *expr) {
-    ctx->node = node;
+    ctx->node             = node;
     xmlXPathObjectPtr obj = xmlXPathEvalExpression(BAD_CAST expr, ctx);
     std::string result;
     if (obj && obj->nodesetval && obj->nodesetval->nodeNr > 0) {
@@ -132,11 +135,6 @@ static xmlXPathObjectPtr xpath_nodes(xmlXPathContextPtr ctx, xmlNodePtr node, co
 }
 
 static void write_data(const std::string &data) {
-    if (DIR_ID.empty()) {
-        std::cout << data;
-        return;
-    }
-
     std::error_code error;
     fs::create_directory(DIR_ID, error);
     if (error) {
@@ -146,18 +144,55 @@ static void write_data(const std::string &data) {
         return;
     }
     
-    std::ofstream file(DIR_ID + "/data");
+    std::ofstream file(DIR_ID +"/data");
     if (!file) {
-        std::cerr << "Failed: create file " << DIR_ID + "/data" << '\n';
+        std::cerr << "Failed: create file " << DIR_ID +"/data" << '\n';
         return;
     }
+
     file << data;
 
     std::cout << MBZ_DISCID << '\n';
 }
 
+static bool write_coverart(const std::string &url) {
+    std::string response, err, ext, path;
+    if (!http_get(url, response, err)) {
+        std::cerr
+            << "Failed: download coverart " << url << 'n'
+            << err << '\n';
+        return false;
+    }
+    
+    if (response.size() < 8) {
+        std::cerr << "Failed: invalid coverart\n";
+        return false;
+    }
+    
+    if (static_cast<unsigned char>(response[0]) == 0x89 && response[1] == 'P' &&
+        response[2] == 'N' && response[3] == 'G') {
+        ext = ".png";
+    } else {
+        ext = ".jpg";
+    }
+    path = DIR_ID +"/cover"+ ext;
+    std::ofstream file(path, std::ios::binary);
+    if (!file) {
+        std::cerr << "Failed: create file " << path << '\n';
+        return false;
+    }
+    
+    file.write(response.data(), response.size());
+    if (!file) {
+        std::cerr << "Failed: write file " << path << '\n';
+        return false;
+    }
+    
+    return true;
+}
+
 static void print_release_musicbrainz(xmlXPathContextPtr ctx, xmlNodePtr release_node) {
-    std::string albumartist, artist, data, length, title;
+    std::string albumartist, artist, coverart, data, length, title;
     albumartist = xpath_string(ctx, release_node, "mb:artist-credit/mb:name-credit/mb:artist/mb:name");
     data        = xpath_string(ctx, release_node, "mb:title") + "\n"
                 + albumartist +"\n";
@@ -180,6 +215,13 @@ static void print_release_musicbrainz(xmlXPathContextPtr ctx, xmlNodePtr release
     if (tracks) xmlXPathFreeObject(tracks);
 
     write_data(data);
+    
+    coverart    = xpath_string(ctx, release_node, "mb:cover-art-archive/mb:front");
+    if (coverart != "true") return;
+    
+    std::string mbid = xpath_string(ctx, release_node, "@id");
+    std::string url  = "https://coverartarchive.org/release/"+ mbid +"/front-1200";
+    write_coverart(url);
 }
 
 static bool lookup_musicbrainz(std::string &err_out) {
@@ -193,7 +235,7 @@ static bool lookup_musicbrainz(std::string &err_out) {
     xmlDocPtr doc = xmlReadMemory(response.c_str(), static_cast<int>(response.size()),
                                    "response.xml", nullptr, 0);
     if (!doc) {
-        err_out = "Failed: parse MusicBrainz XML response.";
+        err_out = "parse MusicBrainz XML response.";
         return false;
     }
 
@@ -223,8 +265,8 @@ static bool lookup_musicbrainz(std::string &err_out) {
 // need proper percent-encoding; the query/read commands above intentionally
 // use literal '+' separators instead (see gnudb_query/gnudb_read).
 [[maybe_unused]] static std::string url_encode(const std::string &s) {
-    CURL *curl = curl_easy_init();
-    char *out = curl_easy_escape(curl, s.c_str(), static_cast<int>(s.size()));
+    CURL *curl         = curl_easy_init();
+    char *out          = curl_easy_escape(curl, s.c_str(), static_cast<int>(s.size()));
     std::string result = out ? out : s;
     if (out) curl_free(out);
     curl_easy_cleanup(curl);
@@ -331,7 +373,7 @@ static bool gnudb_read(const GnudbMatch &match, std::string &data_out, std::stri
     int code = 0;
     std::istringstream(lines[0]) >> code;
     if (code != 210) {
-        err_out = "read failed (code " + std::to_string(code) + ")";
+        err_out = "read failed: " + std::to_string(code);
         return false;
     }
 
@@ -345,9 +387,9 @@ static bool gnudb_read(const GnudbMatch &match, std::string &data_out, std::stri
         if (line.rfind("DTITLE=", 0) == 0) {
             std::string val = line.substr(7);
             auto sep = val.find(" / ");
-            if (sep != std::string::npos) {
-                album       = val.substr(sep + 3);
+            if (sep != std::string::npos) { // albumartist / album
                 albumartist = val.substr(0, sep);
+                album       = val.substr(sep + 3);
             } else {
                 album       = val;
             }
@@ -369,11 +411,12 @@ static bool gnudb_read(const GnudbMatch &match, std::string &data_out, std::stri
         int time_s = (end - start) / 75; // frames -> seconds
         title      = track_titles[i];
         auto tsep  = title.find(" / ");
-        if (tsep != std::string::npos) {
+        if (tsep != std::string::npos) { // trackartist / title
             artist = title.substr(0, tsep);
             title  = title.substr(tsep + 3);
+        } else {
+            artist = albumartist;
         }
-        if (artist.empty()) artist = albumartist;
         data += artist +"^^"+ title +"^^"+ std::to_string(time_s) +"\n";
 
     }
@@ -405,38 +448,36 @@ int main(int argc, char **argv) {
                 << "Usage: " << argv[0] << " [DISCID]\n"
                 << "            default: calculate discid from current CD/DVD\n"
                 << "  DISCID    MusicBrainZ discid (no GnuDB fallback)\n"
-                << "  x         example: " << example << "\n\n";
+                << "  x         example: " << example << "\n"
+                << "  -t        read number of tracks only\n\n";
             return 0;
         }
-
-        if (argv1.size() == 28) {
+        
+        if (argv1 == "-t") {
+            NUM_TRACKS = true;
+        } else if (argv1.size() == 28) {
             MBZ_DISCID = argv1;
         } else {
             MBZ_DISCID = example;
-            std::cout << "Example: " << MBZ_DISCID << "\n\n";
+            std::cout << "Example disc ID: " << MBZ_DISCID << "\n\n";
         }
-
-        curl_global_init(CURL_GLOBAL_DEFAULT);
+    }
+    
+    if (MBZ_DISCID.empty()) {
         std::string err;
-        if (!lookup_musicbrainz(err)) {
-            std::cerr
-                << "Not found:\n"
-                << MBZ_URL << "\n"
-                << err << "\n\n";
-            curl_global_cleanup();
+        if (!read_disc_ids(err)) {
+            std::cerr << "Failed: read disc " << err << "\n";
             return 1;
         }
-        curl_global_cleanup();
+    }
+    
+    if (NUM_TRACKS) {
+        std::cout << (LAST_TRACK - FIRST_TRACK + 1) << '\n';
         return 0;
     }
+    
 
-    std::string err;
-    if (!read_disc_ids(err)) {
-        std::cerr << "Failed: read disc: " << err << "\n";
-        return 1;
-    }
-
-    DIR_ID = "/srv/http/data/audiocd/" + MBZ_DISCID;
+    DIR_ID = "/srv/http/data/audiocd/"+ MBZ_DISCID;
     if (fs::is_directory(DIR_ID)) { // already exists
         std::cout << MBZ_DISCID << '\n';
         return 0;
