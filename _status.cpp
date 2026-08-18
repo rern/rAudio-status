@@ -285,6 +285,26 @@ public:
             ++i;
         }
         V.URI     = mpd_song_get_uri(song);
+        
+        fs::path path(V.URI);
+        fs::path parent = path.parent_path();
+        if (parent.extension() == ".cue") {
+            std::ifstream file("/mnt/MPD/" + parent.string());
+            std::string line;
+            while (std::getline(file, line)) {
+                if (line.starts_with("FILE")) { // FILE "NAME.EXT" WAV
+                    size_t q1 = line.find('"');
+                    size_t q2 = (q1 != std::string::npos) ? line.find('"', q1 + 1) : std::string::npos;
+
+                    if (q1 != std::string::npos && q2 != std::string::npos) {
+                        std::string target_file = line.substr(q1 + 1, q2 - q1 - 1);
+                        V.URI = (parent.parent_path() / target_file).string();
+                        break;
+                    }
+                }
+            }
+        }
+        
         V.FILE    = "/mnt/MPD/"+ V.URI;
         V.EXT     = V.FILE.extension().string().erase(0, 1);
         std::transform(V.EXT.begin(), V.EXT.end(), V.EXT.begin(), [](unsigned char c) {
