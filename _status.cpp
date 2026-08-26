@@ -266,7 +266,24 @@ public:
         I["position"]  = V.POS;
 
         V.ELAPSED      = mpd_status_get_elapsed_time(status);
-        V.VOLUME       = mpd_status_get_volume(status);
+        
+        bool volumenone = fs::exists(DIR.SHM +"nosound") || fs::exists(DIR.SYSTEM +"mixernone");
+        if (fs::exists(DIR.SHM +"btmixer") && (volumenone || !fs::exists(DIR.SYSTEM +"devicewithbt"))) {
+            V.CONTROL = fileContent(DIR.SHM +"btmixer");
+            V.VOLUME  = getVolume(V.CONTROL, "bluealsa");
+        } else {
+            if (volumenone) {
+                V.VOLUMENONE = true;
+            } else {
+                V.CONTROL = fileContent(DIR.SHM +"amixercontrol");
+                if (fs::exists(DIR.SYSTEM +"camilladsp")) {
+                    V.VOLUME = getVolume(V.CONTROL);
+                } else {
+                    V.VOLUME = mpd_status_get_volume(status);
+                }
+            }
+        }
+        
 
         mpd_status_free(status);
     }
@@ -277,7 +294,7 @@ public:
         while ((song = mpd_run_current_song(conn)) == nullptr && i < 3) { // not yet played - no current song
             if (mpd_connection_get_error(conn) != MPD_ERROR_SUCCESS) return;
 //..............................................................................
-            if ( i == 0 ) {                                               // trigger play-stop once
+            if (i == 0) {                                               // trigger play-stop once
                 mpd_run_play(conn);
                 mpd_run_stop(conn);
             }
@@ -393,17 +410,6 @@ int status() {
                 V.COVER = false;
                 break;
             }
-        }
-    }
-
-    if (fs::exists(DIR.SHM +"btmixer") && !fs::exists(DIR.SYSTEM +"devicewithbt")) {
-        V.CONTROL = fileContent(DIR.SHM +"btmixer");
-        V.VOLUME  = getVolume("bluealsa", V.CONTROL);
-    } else {
-        if (fs::exists(DIR.SHM +"nosound") || fs::exists(DIR.SYSTEM +"mixernone")) {
-            V.VOLUMENONE = true;
-        } else {
-            V.CONTROL = fileContent(DIR.SHM +"amixercontrol");
         }
     }
 
