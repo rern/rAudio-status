@@ -321,15 +321,17 @@ public:
                 }
             }
         }
+        B["booklet"] = fs::exists("/mnt/MPD/"+ parent.string() +"/booklet.pdf");
         
-        V.FILE    = "/mnt/MPD/"+ V.URI;
-        V.EXT     = V.FILE.extension().string().erase(0, 1);
+        V.EXT     = path.extension().string().erase(0, 1);
         std::transform(V.EXT.begin(), V.EXT.end(), V.EXT.begin(), [](unsigned char c) {
             return std::toupper(c);
         });
         V.URI_INI = V.URI.substr(0, 4);
         std::unordered_set<std::string> scheme = {"http", "rtmp", "rtp:", "rtsp"};
         V.STREAM  = scheme.count(V.URI_INI) > 0;
+        V.FILE    = "/mnt/MPD/"+ V.URI;
+        
         if (V.STOP) {
             V.TIME = mpd_song_get_duration(song);
             if (!V.STREAM && V.URI_INI != "cdda") {
