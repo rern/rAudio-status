@@ -82,9 +82,6 @@ struct Var {
         URI,
         URI_INI,
         WS_STATUS;
-
-    fs::path
-        FILE;
 };
 
 Dir DIR;

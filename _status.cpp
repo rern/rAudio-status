@@ -23,7 +23,7 @@ bool hasData(const std::string& k) {
 void fileCover(const std::string& file) {
     bool is_dir = false;
     std::string directory;
-    fs::path path(file);
+    fs::path path = file;
     if (fs::is_regular_file(path)) {
         directory = path.parent_path().string();
     } else {
@@ -303,10 +303,10 @@ public:
         }
         V.URI     = mpd_song_get_uri(song);
         
-        fs::path path(V.URI);
+        fs::path path   = V.URI;
         fs::path parent = path.parent_path();
         if (parent.extension() == ".cue") {
-            std::ifstream file("/mnt/MPD/" + parent.string());
+            std::ifstream file("/mnt/MPD/"+ parent.string());
             std::string line;
             while (std::getline(file, line)) {
                 if (line.starts_with("FILE")) { // FILE "NAME.EXT" WAV
@@ -321,21 +321,22 @@ public:
                 }
             }
         }
-        B["booklet"] = fs::exists("/mnt/MPD/"+ parent.string() +"/booklet.pdf");
         
-        V.EXT     = path.extension().string().erase(0, 1);
-        std::transform(V.EXT.begin(), V.EXT.end(), V.EXT.begin(), [](unsigned char c) {
-            return std::toupper(c);
-        });
         V.URI_INI = V.URI.substr(0, 4);
         std::unordered_set<std::string> scheme = {"http", "rtmp", "rtp:", "rtsp"};
         V.STREAM  = scheme.count(V.URI_INI) > 0;
-        V.FILE    = "/mnt/MPD/"+ V.URI;
         
+        std::string file = "/mnt/MPD/"+ V.URI;
+        path             = file;
+        V.EXT            = path.extension().string().erase(0, 1);
+        std::transform(V.EXT.begin(), V.EXT.end(), V.EXT.begin(), [](unsigned char c) {
+            return std::toupper(c);
+        });
+        B["booklet"]     = fs::exists(path.parent_path().string() +"/booklet.pdf");
         if (V.STOP) {
             V.TIME = mpd_song_get_duration(song);
             if (!V.STREAM && V.URI_INI != "cdda") {
-                AudioData AD = Utils::readFile(V.FILE.c_str(), false);
+                AudioData AD = Utils::readFile(file, false);
                 if (!AD.error) {
                     AudioMeta AM = getSampling(AD);
                     V.BITDEPTH   = AM.bitDepth;
@@ -359,7 +360,7 @@ public:
         }
         mpd_song_free(song);
 
-        if (V.COVER && !V.STREAM) fileCover(V.FILE);
+        if (V.COVER && !V.STREAM) fileCover(file);
     }
 };
 
