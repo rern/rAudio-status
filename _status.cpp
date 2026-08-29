@@ -712,11 +712,6 @@ int main(int argc, char **argv) {
     if (ok_status == 1) return 1;
 
     V.WS_STATUS.erase(0, 1);
-    if (ARGV1 == "-o") {
-        std::cout << "{"+ V.WS_STATUS +"}" << '\n';
-        return 0;
-    }
-
     V.WS_STATUS = "{\"channel\": \"mpdplayer\", \"data\": {"+ V.WS_STATUS +"}}";
 
     if (ARGV1 == "-p") return wsPush("127.0.0.1", V.WS_STATUS);
@@ -729,7 +724,6 @@ int main(int argc, char **argv) {
         << "Usage: " << argv[0] << " [-o|-p|-b|-k]\n"
         << "        default: json format\n"
         << "          (with option: no counts and diaplay)\n"
-        << "  -o    \n"
         << "  -p    websocket push      (normal push on change)\n"
         << "  -b    websocket broadcast (snapserver push on change)\n"
         << "  -k    key=value format    (snapserver data on client refresh)\n"
