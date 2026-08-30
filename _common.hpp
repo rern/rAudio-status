@@ -93,6 +93,31 @@ std::unordered_map<std::string, int>         I;
 
 std::vector<std::string>                VECTOR;
 
+void escapeQuotes(std::string& v) {
+    size_t extra = 0;
+    for (char c : v) {
+        if (c == '"') ++extra;
+    }
+    if (extra == 0) return;
+
+    size_t old_size = v.size();
+    size_t new_size = old_size + extra;
+    v.resize(new_size);
+
+    char* data = v.data(); // grab raw pointer once
+    size_t i = old_size;
+    size_t j = new_size;
+    while (i > 0) {
+        char c = data[--i];
+        if (c == '"') {
+            data[--j] = '"';
+            data[--j] = '\\';
+        } else {
+            data[--j] = c;
+        }
+    }
+}
+
 bool fileContains(const std::string& sub, const std::string& file) {
     if (!fs::exists(file)) return false;
 

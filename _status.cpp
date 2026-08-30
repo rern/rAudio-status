@@ -157,23 +157,13 @@ void statusFormatString(const std::string& k, std::string v) {
                                       "icon",  "player", "sampling", "station",   "state",    "Title"};
     if (!V.JSON && !inKey(k, key_S)) return;
 
-    if (v.find('\"') != std::string::npos) { // escape double quotes
-        std::string value;
-        value.reserve(std::string_view(v).size() * 1.1);
-        for (const char *p = v.c_str(); *p != '\0'; ++p) {
-            if (*p == '"') value.push_back('\\');
-            value.push_back(*p);
-        }
-        v = value;
-    }
+    escapeQuotes(v);
     std::string kv;
     if (V.JSON) {
         kv = ", \""+ k +"\": \""+ v +'"';
         if (V.SNAPCLIENT) { V.WS_STATUS += kv; return; }
-
-    } else if (v.find(' ') != std::string::npos) {
-        kv = k +"=\""+ v +'"';
     } else {
+        if (v.find(' ') != std::string::npos) v = '"'+ v +'"';
         kv = k +'='+ v;
     }
     std::cout << kv << '\n';
