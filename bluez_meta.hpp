@@ -2,13 +2,17 @@
 
 #include <dbus/dbus.h>
 
+// =============================================================================
 // Structure to hold codec decoding results
+// =============================================================================
 struct CodecInfo {
     std::string codec_name;
     int sample_rate;
 };
 
+// =============================================================================
 // Error wrapper logic
+// =============================================================================
 void check_error(DBusError* err) {
     if (dbus_error_is_set(err)) {
         std::cerr << "D-Bus Error: " << err->message << '\n';
@@ -17,7 +21,9 @@ void check_error(DBusError* err) {
     }
 }
 
+// =============================================================================
 // Internal codec parsing logic
+// =============================================================================
 CodecInfo parse_sbc(const std::vector<uint8_t>& config) {
     if (config.empty()) return {"SBC", 0};
     uint8_t freq = config[0] & 0xF0;
@@ -86,6 +92,9 @@ CodecInfo decode_sampling_rate(const std::vector<uint8_t>& config) {
     return {"Unknown Codec", 0};
 }
 
+// =============================================================================
+// Track metadata parsing (from MediaPlayer1 "Track" property)
+// =============================================================================
 void parse_track_metadata(DBusMessageIter* dict_iter) {
     DBusMessageIter entry_iter;
     dbus_message_iter_recurse(dict_iter, &entry_iter);
@@ -103,10 +112,10 @@ void parse_track_metadata(DBusMessageIter* dict_iter) {
         int type = dbus_message_iter_get_arg_type(&variant_iter);
 
         std::string_view k(key);
-        
+
         if (type == DBUS_TYPE_STRING) {
             if (k == "Title" || k == "Artist" || k == "Album") {
-                const char* val; 
+                const char* val;
                 dbus_message_iter_get_basic(&variant_iter, &val);
                 S[std::string(k)] = val;
             }
@@ -125,6 +134,9 @@ void parse_track_metadata(DBusMessageIter* dict_iter) {
     }
 }
 
+// =============================================================================
+// MediaPlayer1 GetAll properties parsing (Status / Position / Track)
+// =============================================================================
 void parse_get_all_properties(DBusMessageIter* array_iter) {
     DBusMessageIter entry_iter;
     dbus_message_iter_recurse(array_iter, &entry_iter);
@@ -142,7 +154,7 @@ void parse_get_all_properties(DBusMessageIter* array_iter) {
         int type = dbus_message_iter_get_arg_type(&variant_iter);
 
         std::string_view k(key);
-        
+
         if (k == "Status" && type == DBUS_TYPE_STRING) {
             const char* val;
             dbus_message_iter_get_basic(&variant_iter, &val);
@@ -161,6 +173,108 @@ void parse_get_all_properties(DBusMessageIter* array_iter) {
     }
     if (V.ELAPSED == 0) V.STATE = "stop";
     stateSet();
+}
+
+// =============================================================================
+// HELPER: Derive the device object path from a player/transport path.
+// e.g. ".../dev_XX_.../avrcp/player1"  -> ".../dev_XX_..."
+//      ".../dev_XX_.../sep3/fd0"       -> ".../dev_XX_..."
+//      ".../dev_XX_..."                -> unchanged
+// =============================================================================
+std::string get_device_path(const std::string& any_path) {
+    size_t pos = any_path.find("/avrcp");
+    if (pos != std::string::npos) return any_path.substr(0, pos);
+
+    pos = any_path.find("/sep");
+    if (pos != std::string::npos) return any_path.substr(0, pos);
+
+    return any_path;
+}
+
+// =============================================================================
+// HELPER: Walk org.bluez's ObjectManager tree to find the MediaTransport1
+// object whose "Device" property matches the given device path.
+//
+// This replaces guessing a fixed "/fd0" suffix, since the active endpoint
+// (sep1, sep3, sep6, ...) depends on codec negotiation and isn't fixed.
+// Returns "" if no active transport exists for that device (stream idle).
+// =============================================================================
+std::string find_transport_path(DBusConnection* conn, const std::string& device_path) {
+    DBusError err;
+    dbus_error_init(&err);
+
+    DBusMessage* msg = dbus_message_new_method_call(
+        "org.bluez", "/", "org.freedesktop.DBus.ObjectManager", "GetManagedObjects");
+
+    DBusMessage* reply = dbus_connection_send_with_reply_and_block(conn, msg, -1, &err);
+    dbus_message_unref(msg);
+
+    if (!reply) {
+        std::cerr << "GetManagedObjects Error: " << err.message << '\n';
+        dbus_error_free(&err);
+        return "";
+    }
+
+    DBusMessageIter root_iter, obj_iter;
+    dbus_message_iter_init(reply, &root_iter);           // a{oa{sa{sv}}}
+
+    std::string found_path;
+
+    if (dbus_message_iter_get_arg_type(&root_iter) == DBUS_TYPE_ARRAY) {
+        dbus_message_iter_recurse(&root_iter, &obj_iter);
+
+        while (dbus_message_iter_get_arg_type(&obj_iter) == DBUS_TYPE_DICT_ENTRY) {
+            DBusMessageIter entry_iter;
+            dbus_message_iter_recurse(&obj_iter, &entry_iter);
+
+            const char* obj_path;
+            dbus_message_iter_get_basic(&entry_iter, &obj_path);
+            dbus_message_iter_next(&entry_iter);
+
+            DBusMessageIter iface_iter;
+            dbus_message_iter_recurse(&entry_iter, &iface_iter); // a{sa{sv}}
+
+            while (dbus_message_iter_get_arg_type(&iface_iter) == DBUS_TYPE_DICT_ENTRY) {
+                DBusMessageIter iface_entry;
+                dbus_message_iter_recurse(&iface_iter, &iface_entry);
+
+                const char* iface_name;
+                dbus_message_iter_get_basic(&iface_entry, &iface_name);
+                dbus_message_iter_next(&iface_entry);
+
+                if (std::string_view(iface_name) == "org.bluez.MediaTransport1") {
+                    DBusMessageIter prop_iter;
+                    dbus_message_iter_recurse(&iface_entry, &prop_iter); // a{sv}
+
+                    while (dbus_message_iter_get_arg_type(&prop_iter) == DBUS_TYPE_DICT_ENTRY) {
+                        DBusMessageIter prop_entry, variant_iter;
+                        dbus_message_iter_recurse(&prop_iter, &prop_entry);
+
+                        const char* prop_name;
+                        dbus_message_iter_get_basic(&prop_entry, &prop_name);
+                        dbus_message_iter_next(&prop_entry);
+
+                        if (std::string_view(prop_name) == "Device") {
+                            dbus_message_iter_recurse(&prop_entry, &variant_iter);
+                            const char* dev_val;
+                            dbus_message_iter_get_basic(&variant_iter, &dev_val);
+                            if (device_path == dev_val) {
+                                found_path = obj_path;
+                            }
+                        }
+                        dbus_message_iter_next(&prop_iter);
+                    }
+                }
+                dbus_message_iter_next(&iface_iter);
+            }
+
+            if (!found_path.empty()) break;
+            dbus_message_iter_next(&obj_iter);
+        }
+    }
+
+    dbus_message_unref(reply);
+    return found_path;
 }
 
 // =============================================================================
@@ -203,14 +317,18 @@ bool get_media_player_properties(DBusConnection* conn, const std::string& player
 }
 
 // =============================================================================
-// HELPER FUNCTION 2: Fetches and decodes pipeline characteristics from MediaTransport1
+// HELPER FUNCTION 2: Fetches and decodes pipeline characteristics from
+// MediaTransport1. Discovers the transport path dynamically via
+// ObjectManager instead of assuming a fixed "/fd0" suffix, since the
+// active sepN endpoint varies by codec/device.
 // =============================================================================
 bool get_media_transport_properties(DBusConnection* conn, const std::string& player_path) {
-    // Dynamically deduce the transport endpoint path from the player node
-    std::string transport_path = player_path;
-    size_t avrcp_pos = transport_path.find("/avrcp/player");
-    if (avrcp_pos != std::string::npos) {
-        transport_path = transport_path.substr(0, avrcp_pos) + "/fd0";
+    std::string device_path = get_device_path(player_path);
+    std::string transport_path = find_transport_path(conn, device_path);
+
+    if (transport_path.empty()) {
+        std::cout << "Codec parameters suspended or unavailable (Stream idle).\n";
+        return false;
     }
 
     DBusMessage* msg = dbus_message_new_method_call(
@@ -229,7 +347,8 @@ bool get_media_transport_properties(DBusConnection* conn, const std::string& pla
     dbus_message_unref(msg);
 
     if (!reply) {
-        std::cout << "Codec parameters suspended or unavailable (Stream idle).\n";
+        std::cerr << "MediaTransport1 Query Error [" << transport_path << "]: "
+                   << trans_err.message << '\n';
         dbus_error_free(&trans_err);
         return false;
     }
@@ -247,14 +366,14 @@ bool get_media_transport_properties(DBusConnection* conn, const std::string& pla
 
             const char* key;
             dbus_message_iter_get_basic(&entry_iter, &key);
-            dbus_message_iter_next(&entry_iter); 
+            dbus_message_iter_next(&entry_iter);
 
-            if (std::string(key) == "Configuration") {
-                dbus_message_iter_recurse(&entry_iter, &variant_iter); 
-                
+            if (std::string_view(key) == "Configuration") {
+                dbus_message_iter_recurse(&entry_iter, &variant_iter);
+
                 if (dbus_message_iter_get_arg_type(&variant_iter) == DBUS_TYPE_ARRAY) {
                     dbus_message_iter_recurse(&variant_iter, &array_iter);
-                    
+
                     std::vector<uint8_t> config_bytes;
                     while (dbus_message_iter_get_arg_type(&array_iter) == DBUS_TYPE_BYTE) {
                         uint8_t byte_val;
@@ -265,9 +384,10 @@ bool get_media_transport_properties(DBusConnection* conn, const std::string& pla
 
                     CodecInfo result = decode_sampling_rate(config_bytes);
                     if (result.sample_rate > 0) {
-                        V.SAMPLING = std::format("{:.1f}", result.sample_rate / 1000.0) +" kHz • "+ result.codec_name;
+                        V.SAMPLING = std::format("{:.1f}", result.sample_rate / 1000.0)
+                                     + " kHz \u2022 " + result.codec_name;
                     }
-                    
+
                     found_config = true;
                     break;
                 }
@@ -289,13 +409,13 @@ void bluezMeta() {
 
     DBusConnection* conn = dbus_bus_get(DBUS_BUS_SYSTEM, &err);
     check_error(&err);
-    
+
     std::ifstream file("/srv/http/data/shm/bluetoothdest");
     if (!file) {
         std::cerr << "Error: bluezMeta\n";
         return;
     }
-    
+
     std::string player_dest;
     std::getline(file, player_dest);
 
@@ -308,7 +428,7 @@ void bluezMeta() {
     // Call helper 1: Metadata processing
     get_media_player_properties(conn, player_dest);
 
-    // Call helper 2: Audio pipeline extraction 
+    // Call helper 2: Audio pipeline extraction (dynamic transport discovery)
     get_media_transport_properties(conn, player_dest);
 
     dbus_connection_unref(conn);

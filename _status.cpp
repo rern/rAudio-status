@@ -177,7 +177,7 @@ void rendererStatus() {
     }
 
     std::string kv;
-    if (V.SNAPCAST) {                // V.SNAPCLIENT js: REFRESHDATA() > PLAYBACK.get()
+    if (V.SNAPCAST) {              // V.SNAPCLIENT js: REFRESHDATA() > PLAYBACK.get()
         std::string ip = fileContent(DIR.SHM +"snapserverip");
         kv = wsSend(ip, "status"); // websocket server status -k > reply key=value
         S["snapserverip"] = fileContent(DIR.SHM +"snapserverip");
