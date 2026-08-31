@@ -221,6 +221,20 @@ public:
         mpd_status *status = mpd_run_status(conn);
         if (status == nullptr) return;
 //..............................................................................
+        if (V.BTMIXER && !fs::exists(DIR.SYSTEM +"devicewithbt")) {
+            V.CONTROL = fileContent(DIR.SHM +"btmixer");
+            V.VOLUME  = getVolume(V.CONTROL, "bluealsa");
+        } else if (!V.VOLUMENONE) {
+            if (V.CAMILLADSP) {
+                V.CONTROL = fileContent(DIR.SHM +"amixercontrol");
+                V.VOLUME = V.CONTROL.empty() ? mpd_status_get_volume(status) : getVolume(V.CONTROL);
+            } else {
+                V.VOLUME = mpd_status_get_volume(status);
+            }
+        }
+        
+        if (!V.MPD && !V.UPNP) return;
+
         switch (mpd_status_get_state(status)) {
             case MPD_STATE_PLAY:  V.STATE = "play";  break;
             case MPD_STATE_PAUSE: V.STATE = "pause"; break;
@@ -229,6 +243,7 @@ public:
         stateSet();
         if (V.PLAY) V.TIMESTAMP = epochMs();
 
+        V.ELAPSED  = mpd_status_get_elapsed_time(status);
         V.TIME     = mpd_status_get_total_time(status);
         V.POS      = mpd_status_get_song_pos(status);
         V.PLLENGTH = mpd_status_get_queue_length(status);
@@ -254,26 +269,6 @@ public:
 
         I["pllength"]  = V.PLLENGTH;
         I["position"]  = V.POS;
-
-        V.ELAPSED      = mpd_status_get_elapsed_time(status);
-        
-        bool volumenone = fs::exists(DIR.SHM +"nosound") || fs::exists(DIR.SYSTEM +"mixernone");
-        if (fs::exists(DIR.SHM +"btmixer") && (volumenone || !fs::exists(DIR.SYSTEM +"devicewithbt"))) {
-            V.CONTROL = fileContent(DIR.SHM +"btmixer");
-            V.VOLUME  = getVolume(V.CONTROL, "bluealsa");
-        } else {
-            if (volumenone) {
-                V.VOLUMENONE = true;
-            } else {
-                V.CONTROL = fileContent(DIR.SHM +"amixercontrol");
-                if (fs::exists(DIR.SYSTEM +"camilladsp")) {
-                    V.VOLUME = getVolume(V.CONTROL);
-                } else {
-                    V.VOLUME = mpd_status_get_volume(status);
-                }
-            }
-        }
-        
 
         mpd_status_free(status);
     }
@@ -362,7 +357,15 @@ int status() {
     else if (V.PLAYER == "snapcast")  V.SNAPCAST  = true;
     else if (V.PLAYER == "spotify")   V.SPOTIFY   = true;
     else if (V.PLAYER == "upnp")      V.UPNP      = true;
+    V.CAMILLADSP = fs::exists(DIR.SYSTEM +"camilladsp");
 
+    MPDclient MPD;
+    if (!MPD.ok()) {
+        std::cerr << "MPD connection failed\n";
+        return 1;
+//..............................................................................
+    }
+    
     if (V.MPD || V.UPNP) {
         struct statfs buf;
         if (fs::is_symlink(DIR.MPD) && statfs(DIR.MPD.c_str(), &buf) != 0) {
@@ -375,12 +378,6 @@ int status() {
             std::system("systemctl start mpd");
         }
 
-        MPDclient MPD;
-        if (!MPD.ok()) {
-            std::cerr << "MPD connection failed\n";
-            return 1;
-//..............................................................................
-        }
         MPD.runStatus();
         if (V.PLLENGTH) {
             MPD.runCurrentSong();
@@ -390,6 +387,7 @@ int status() {
         }
     } else {
         rendererStatus();
+        MPD.runStatus(); // get volume only
     }
 
     std::ifstream file(DIR.SYSTEM +"display.json");
@@ -549,7 +547,7 @@ int status() {
     S["sampling"] = V.SAMPLING;
     S["state"]    = V.STATE;
 
-    B["btsender"]     = fs::exists(DIR.SHM +"btmixer");
+    B["btsender"]     = V.BTMIXER;
     B["librandom"]    = fs::exists(DIR.SYSTEM +"librandom");
     B["relays"]       = fs::exists(DIR.SYSTEM +"relays");
     B["relayson"]     = fs::exists(DIR.SHM +"relayson");
@@ -585,20 +583,21 @@ int status() {
 
 ////////////////////////////////////////////////////////////////////////////////
     if (V.JSON && !V.SNAPCLIENT) { // page, counts, display
-        std::cout
-            << "{\n"
-            << "  \"page\": false\n";
-        std::string display = "{\n";
-        VECTOR = {"ap", "camilladsp", "dabradio", "equalizer", "loginsetting", "multiraudio", "relays", "snapclient"};
+        std::string display;
+        VECTOR = {"ap", "dabradio", "equalizer", "loginsetting", "multiraudio", "relays", "snapclient"};
         for (const std::string& k : VECTOR) {
             display += "  \""+ k +"\": "+ (fs::exists(DIR.SYSTEM + k) ? "true" : "false") +",\n";
         }
-        display += "  \"volumenone\": "+ std::string(V.VOLUMENONE ? "true" : "false") +",\n"+
+        display += "  \"camilladsp\": "+ std::string(V.CAMILLADSP ? "true" : "false") +",\n"+
+                   "  \"volumenone\": "+ std::string(V.VOLUMENONE ? "true" : "false") +",\n"+
                     fileContent(DIR.SYSTEM +"display.json").substr(2); // "{\n" remove
 
         std::cout
-            << ", \"counts\"    : " << fileContent(DIR.MPD +"counts") << '\n'
-            << ", \"display\"   : " << display << '\n';
+            << "{\n"
+            << "  \"page\"    : false\n"
+            << ", \"counts\"  : " << fileContent(DIR.MPD +"counts") << '\n'
+            << ", \"display\" : {\n"
+            << display << '\n';
     }
 
     for (const auto& [k, v] : S) statusFormatString(k, v);

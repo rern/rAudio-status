@@ -32,9 +32,12 @@ struct Dir {
         SHM    = DATA +"shm/",
         SYSTEM = DATA +"system/";
 };
+Dir DIR;
 
 struct Var {
     bool
+        BTMIXER     = fs::exists(DIR.SHM +"btmixer"),
+        CAMILLADSP  = fs::exists(DIR.SYSTEM +"camilladsp"),
         COVER       = true,
         GET_COVER   = false,
         JSON        = true,
@@ -43,7 +46,7 @@ struct Var {
         SNAPCLIENT  = false,
         STOP        = true,
         STREAM      = false,
-        VOLUMENONE  = false,
+        VOLUMENONE  = fs::exists(DIR.SHM +"nosound") || fs::exists(DIR.SYSTEM +"mixernone"),
         WEBRADIO    = false,
 
         AIRPLAY     = false,
@@ -83,8 +86,6 @@ struct Var {
         URI_INI,
         WS_STATUS;
 };
-
-Dir DIR;
 Var V;
 
 std::unordered_map<std::string, bool>        B;
