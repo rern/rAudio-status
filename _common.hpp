@@ -40,12 +40,11 @@ struct Var {
         CAMILLADSP  = fs::exists(DIR.SYSTEM +"camilladsp"),
         COVER       = true,
         GET_COVER   = false,
-        JSON        = true,
         PAUSE       = false,
         PLAY        = false,
-        SNAPCLIENT  = false,
         STOP        = true,
         STREAM      = false,
+        TRACK_ONLY  = false,
         VOLUMENONE  = fs::exists(DIR.SHM +"nosound") || fs::exists(DIR.SYSTEM +"mixernone"),
         WEBRADIO    = false,
 
@@ -77,14 +76,15 @@ struct Var {
         CONTROL,
         EXT,
         ICON,
+        IP,
         PLAYER,
         SAMPLING,
         STATE,
         STATION,
         STATIONCOVER,
+        TRACK,
         URI,
-        URI_INI,
-        WS_STATUS;
+        URI_INI;
 };
 Var V;
 
@@ -147,6 +147,18 @@ std::string alphaNumericLower(const std::string& str) {
     return result;
 }
 
+int64_t epochMs() {
+    return std::chrono::duration_cast<std::chrono::milliseconds>(
+                std::chrono::system_clock::now().time_since_epoch()
+            ).count();
+}
+
+int64_t epochS() {
+    return std::chrono::duration_cast<std::chrono::seconds>(
+                std::chrono::system_clock::now().time_since_epoch()
+            ).count();
+}
+
 std::string fileContent(const std::string& file, const std::string& def = "") {
     if (!fs::exists(file)) return def;
 
@@ -191,16 +203,53 @@ std::string fileEmbedded(const std::string& file) {
     return "/data/shm/embedded/"+ alphaNumericLower(filename);
 }
 
-int64_t epochMs() {
-    return std::chrono::duration_cast<std::chrono::milliseconds>(
-                std::chrono::system_clock::now().time_since_epoch()
-            ).count();
-}
+void json2var(std::string& json) {
+    size_t i = 0, n = json.size();
+    while (i < n && json[i] != '{') i++;
+    i++;
 
-int64_t epochS() {
-    return std::chrono::duration_cast<std::chrono::seconds>(
-                std::chrono::system_clock::now().time_since_epoch()
-            ).count();
+    while (i < n) {
+        while (i < n && (isspace(json[i]) || json[i] == ',')) i++;
+        if (i >= n || json[i] == '}') break;
+
+        // key (always quoted)
+        i++; // skip opening quote
+        size_t keyStart = i;
+        while (json[i] != '"') i++;
+        std::string key = json.substr(keyStart, i - keyStart);
+        i++; // skip closing quote
+
+        while (i < n && (isspace(json[i]) || json[i] == ':')) i++;
+
+        // value
+        std::string value;
+        bool isString = false;
+        if (json[i] == '"') { // Album, Artist, coverart, state, Title
+            isString = true;
+            i++;
+            size_t valStart = i;
+            while (json[i] != '"') i++; // note: doesn't handle escaped \" — see caveat below
+            value = json.substr(valStart, i - valStart);
+            escapeQuotes(value);
+            if (key == "coverart") {
+                V.COVERART = value;
+            } else {
+                S[key] = value;
+            }
+            i++;
+        } else {
+            size_t valStart = i;
+            while (i < n && json[i] != ',' && json[i] != '}' && !isspace(json[i])) i++;
+            value = json.substr(valStart, i - valStart);
+            if (key == "pllength") {
+                I[key] = std::stoi(value);
+            } else if (key == "timestamp") {
+                V.TIMESTAMP = std::stoll(value);
+            } else {
+                B[key] = value == "true";
+            }
+        }
+    }
 }
 
 void stateSet() {
