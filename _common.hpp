@@ -36,7 +36,7 @@ Dir DIR;
 
 struct Var {
     bool
-        BTMIXER     = fs::exists(DIR.SHM +"btmixer"),
+        BT_MIXER    = fs::exists(DIR.SHM +"btmixer"),
         CAMILLADSP  = fs::exists(DIR.SYSTEM +"camilladsp"),
         COVER       = true,
         GET_COVER   = false,
@@ -45,7 +45,7 @@ struct Var {
         STOP        = true,
         STREAM      = false,
         TRACK_ONLY  = false,
-        VOLUMENONE  = fs::exists(DIR.SHM +"nosound") || fs::exists(DIR.SYSTEM +"mixernone"),
+        VOLUME_NONE = fs::exists(DIR.SHM +"nosound") || fs::exists(DIR.SYSTEM +"mixernone"),
         WEBRADIO    = false,
 
         AIRPLAY     = false,
@@ -59,7 +59,7 @@ struct Var {
         BITDEPTH   = 0,
         BITRATE    = 0,
         ELAPSED    = 0,
-        PLLENGTH   = 0,
+        PL_LENGTH  = 0,
         POS        = 0,
         TIME       = 0,
         VOLUME     = 0;
@@ -76,12 +76,12 @@ struct Var {
         CONTROL,
         EXT,
         ICON,
-        IP,
         PLAYER,
         SAMPLING,
+        SNAPSERVER_IP,
         STATE,
         STATION,
-        STATIONCOVER,
+        STATIONART,
         TRACK,
         URI,
         URI_INI;

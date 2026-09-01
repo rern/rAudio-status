@@ -47,9 +47,9 @@ void fileCover(const std::string& file) {
             std::string path = file.path().string();
             if (path.starts_with("/srv")) path.erase(0, 9);
             if (V.WEBRADIO) {
-                V.STATIONCOVER = path;
+                V.STATIONART = path;
             } else {
-                V.COVERART = path;
+                V.COVERART   = path;
             }
             break;
         }
@@ -100,17 +100,17 @@ void kv2var(const std::string& kv) {
                     value.replace(p, 2, "\"");
                     p += 1; // move past the replaced quote
                 }
-                     if (key == "Artist")       S["Artist"]    = value;
-                else if (key == "Title")        S["Title"]     = value;
-                else if (key == "Album")        S["Album"]     = value;
-                else if (key == "coverart")     V.COVERART     = value;
-                else if (key == "state")        V.STATE        = value;
-                else if (key == "sampling")     V.SAMPLING     = value;
-                else if (key == "station")      V.STATION      = value;
-                else if (key == "stationcover") V.STATIONCOVER = value;
-                else if (key == "elapsed")      V.ELAPSED      = std::stoi(value);
-                else if (key == "start")        V.START        = std::stoi(value);
-                else if (key == "Time")         V.TIME         = std::stoi(value);
+                     if (key == "Artist")     S["Artist"]  = value;
+                else if (key == "Title")      S["Title"]   = value;
+                else if (key == "Album")      S["Album"]   = value;
+                else if (key == "coverart")   V.COVERART   = value;
+                else if (key == "state")      V.STATE      = value;
+                else if (key == "sampling")   V.SAMPLING   = value;
+                else if (key == "station")    V.STATION    = value;
+                else if (key == "stationart") V.STATIONART = value;
+                else if (key == "elapsed")    V.ELAPSED    = std::stoi(value);
+                else if (key == "start")      V.START      = std::stoi(value);
+                else if (key == "Time")       V.TIME       = std::stoi(value);
 
                 stateSet();
             }
@@ -207,10 +207,10 @@ public:
         mpd_status *status = mpd_run_status(conn);
         if (status == nullptr) return;
 //..............................................................................
-        if (V.BTMIXER && !fs::exists(DIR.SYSTEM +"devicewithbt")) {
+        if (V.BT_MIXER && !fs::exists(DIR.SYSTEM +"devicewithbt")) {
             V.CONTROL = fileContent(DIR.SHM +"btmixer");
             V.VOLUME  = getVolume(V.CONTROL, "bluealsa");
-        } else if (!V.VOLUMENONE) {
+        } else if (!V.VOLUME_NONE) {
             if (V.CAMILLADSP) {
                 V.CONTROL = fileContent(DIR.SHM +"amixercontrol");
                 V.VOLUME = V.CONTROL.empty() ? mpd_status_get_volume(status) : getVolume(V.CONTROL);
@@ -229,10 +229,10 @@ public:
         stateSet();
         if (V.PLAY) V.TIMESTAMP = epochMs();
 
-        V.ELAPSED  = mpd_status_get_elapsed_time(status);
-        V.TIME     = mpd_status_get_total_time(status);
-        V.POS      = mpd_status_get_song_pos(status);
-        V.PLLENGTH = mpd_status_get_queue_length(status);
+        V.ELAPSED   = mpd_status_get_elapsed_time(status);
+        V.TIME      = mpd_status_get_total_time(status);
+        V.POS       = mpd_status_get_song_pos(status);
+        V.PL_LENGTH = mpd_status_get_queue_length(status);
 
         if (!V.STOP) {
             const mpd_audio_format *audio = mpd_status_get_audio_format(status);
@@ -253,7 +253,7 @@ public:
         B["single"]    = mpd_status_get_single(status);
         I["crossfade"] = mpd_status_get_crossfade(status);
 
-        I["pllength"]  = V.PLLENGTH;
+        I["pllength"]  = V.PL_LENGTH;
         I["position"]  = V.POS;
 
         mpd_status_free(status);
@@ -365,7 +365,7 @@ int status() {
         }
 
         MPD.runStatus();
-        if (V.PLLENGTH) {
+        if (V.PL_LENGTH) {
             MPD.runCurrentSong();
         } else {
             S["hostname"] = hostName();
@@ -465,8 +465,8 @@ int status() {
                     if (VECTOR.size() > 1) V.SAMPLING = VECTOR[1];
                 }
                 if (V.COVER) fileCover(dir);
-                S["station"]      = V.STATION;
-                S["stationcover"] = V.STATIONCOVER;
+                S["station"]    = V.STATION;
+                S["stationart"] = V.STATIONART;
             }
             
             if (V.PLAY) {
@@ -508,7 +508,7 @@ int status() {
     } else {
         V.SAMPLING += " • "+ V.EXT;
     }
-    if (V.MPD && V.PLLENGTH > 1) V.SAMPLING = std::format("{}/{} • {}", V.POS + 1, V.PLLENGTH, V.SAMPLING);
+    if (V.MPD && V.PL_LENGTH > 1) V.SAMPLING = std::format("{}/{} • {}", V.POS + 1, V.PL_LENGTH, V.SAMPLING);
     
     if (V.COVER &&
         V.COVERART.empty() &&
@@ -533,7 +533,7 @@ int status() {
     S["sampling"] = V.SAMPLING;
     S["state"]    = V.STATE;
 
-    B["btsender"]     = V.BTMIXER;
+    B["btsender"]     = V.BT_MIXER;
     B["librandom"]    = fs::exists(DIR.SYSTEM +"librandom");
     B["relays"]       = fs::exists(DIR.SYSTEM +"relays");
     B["relayson"]     = fs::exists(DIR.SHM +"relayson");
@@ -568,17 +568,14 @@ int status() {
     I["volumemax"]    = volumemax;
 
 ////////////////////////////////////////////////////////////////////////////////
-    if (V.TRACK_ONLY) { // no: page, counts, display
-        if (!V.COVERART.empty()) S["coverart"] = "http://"+ V.IP + V.COVERART;
-        if (!V.STATIONCOVER.empty()) S["stationcover"] = "http://"+ V.IP + V.STATIONCOVER;
-    } else {
+    if (!V.TRACK_ONLY) { // page, counts, display
         std::string display = "{\n";
         VECTOR = {"ap", "dabradio", "equalizer", "loginsetting", "multiraudio", "relays", "snapclient"};
         for (const std::string& k : VECTOR) {
             display += "  \""+ k +"\": "+ (fs::exists(DIR.SYSTEM + k) ? "true" : "false") +",\n";
         }
         display += "  \"camilladsp\": "+ std::string(V.CAMILLADSP ? "true" : "false") +",\n"+
-                   "  \"volumenone\": "+ std::string(V.VOLUMENONE ? "true" : "false") +",\n"+
+                   "  \"volumenone\": "+ std::string(V.VOLUME_NONE ? "true" : "false") +",\n"+
                     fileContent(DIR.SYSTEM +"display.json").substr(2); // 1st "{\n" remove
 
         std::cout
@@ -586,6 +583,11 @@ int status() {
             << "  \"page\"    : false\n"
             << ", \"counts\"  : " << fileContent(DIR.MPD +"counts") << '\n'
             << ", \"display\" : " << display << '\n';
+    }
+    
+    if (!V.SNAPSERVER_IP.empty()) { // reply to snapclient
+        if (!V.COVERART.empty())   S["coverart"]   = "http://"+ V.SNAPSERVER_IP + V.COVERART;
+        if (!V.STATIONART.empty()) S["stationart"] = "http://"+ V.SNAPSERVER_IP + V.STATIONART;
     }
 
     for (const auto& [k, v] : S) statusFormatString(k, v);
@@ -676,19 +678,17 @@ int main(int argc, char **argv) {
     }
 
     V.TRACK_ONLY  = true; // status-push on track changed / ws on each client refresh
-    V.IP          = ipAddress();
-    V.TRACK      += " \"snapserverip\": \""+ V.IP +"\"";
 
     int ok_status = status();
     if (ok_status == 1) return 1;
     
-    V.TRACK       = '{'+ V.TRACK +'}';
     if (ARGV1 == "-s") {
-        std::cout << V.TRACK;
+        V.SNAPSERVER_IP = ipAddress();
+        std::cout << "{ \"snapserverip\": \"" << V.SNAPSERVER_IP << "\"" << V.TRACK << '}';
         return 0;
     }
     
-    std::string channel_data = "{ \"channel\": \"mpdplayer\", \"data\": "+ V.TRACK +" }";
+    std::string channel_data = "{ \"channel\": \"mpdplayer\", \"data\": { "+ V.TRACK.substr(1) +" } }"; // remove 1st ,
 
     if (ARGV1 == "-p") return wsPush("127.0.0.1", channel_data);
 
