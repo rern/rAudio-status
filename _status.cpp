@@ -591,7 +591,7 @@ int status() {
     }
 
     for (const auto& [k, v] : S) statusFormatString(k, v);
-    for (const auto& [k, v] : I) statusFormat(k, v >= 0 ? std::to_string(v) : "false");
+    for (const auto& [k, v] : I) statusFormat(k, std::to_string(v));
     for (const auto& [k, v] : B) statusFormat(k, v ? "true" : "false");
 
     if (V.PLAY) statusFormat("timestamp", std::to_string(V.TIMESTAMP));
