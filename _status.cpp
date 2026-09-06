@@ -656,10 +656,10 @@ int main(int argc, char **argv) {
         std::string msg;
         if (argc == 2) { // no message - debug/test
             if (ARGV1 == "-W") {
-                msg = "status [IP]";
+                msg = "ping";
             } else {
                 std::string type = ARGV1 == "-B" ? "Broadcast to all servers." : "Push to clients of this server.";
-                msg = "{ \"channel\": \"notify\", \"data\": { \"icon\": \"raudio\", \"title\": \"WebSocket\", \"message\": \""+ ARGV1 +"\" } }";
+                msg = "{ \"channel\": \"notify\", \"data\": { \"icon\": \"raudio\", \"title\": \"WebSocket\", \"message\": \"status "+ ARGV1 +"\" } }";
             }
             std::cout << "status " << ARGV1 << " " << msg << "\n\n";
         } else if (argc == 3) { // local message
@@ -670,7 +670,7 @@ int main(int argc, char **argv) {
             else                        {msg = argv[2]; if (argc > 3) ip  = argv[3];}
         }
         if (ARGV1 == "-B") return wsBroadcast(msg); // to all servers (then to each clients)
-            
+        
         if (ARGV1 == "-P") return wsPush(ip, msg);  // to clients of this server
 
         std::cout << wsSend(ip, msg) << '\n';       // -W wait for response
@@ -703,8 +703,9 @@ int main(int argc, char **argv) {
         << "  -s    snapserver status   (no counts and diaplay)\n"
         << "  -v    version\n\n"
 
-        << "Websocket: " << argv[0] << " [-W|-P|-B] [IP] [MESSAGE]\n"
-        << "        default IP     : 127.0.0.1\n"
+        << "Websocket: " << argv[0] << " [-P|-B|-W] [IP] [MESSAGE]\n"
+        << "        default IP      : 127.0.0.1\n"
+        << "        default MESSAGE : (stdout)\n"
         << "  -P    push - exit immediately\n"
         << "  -B    broadcast\n"
         << "  -W    send - wait for reply\n\n"
