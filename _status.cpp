@@ -76,48 +76,6 @@ void fileCover(const std::string& file) {
     V.COVERART       = extractEmbedded(AD, AE, true, file, file_embedded);
 }
 
-void kv2var(const std::string& kv) {
-    if (kv.empty()) return;
-
-    std::istringstream iss(kv);
-    std::string line;
-
-    while (std::getline(iss, line)) {
-        if (line.empty()) continue;
-
-        std::string key, value;
-        std::istringstream iss(line);
-
-        if (std::getline(iss, key, '=')) {
-            if (std::getline(iss, value)) {
-                if (value.empty()) continue;
-
-                if (value.front() == '"' && value.back() == '"') { // strip 1st " and  " last quotes
-                    value = value.substr(1, value.size() - 2);
-                }
-                std::string::size_type p = 0;
-                while ((p = value.find("\\\"", p)) != std::string::npos) { // unescape quotes \"
-                    value.replace(p, 2, "\"");
-                    p += 1; // move past the replaced quote
-                }
-                     if (key == "Artist")     S["Artist"]  = value;
-                else if (key == "Title")      S["Title"]   = value;
-                else if (key == "Album")      S["Album"]   = value;
-                else if (key == "coverart")   V.COVERART   = value;
-                else if (key == "state")      V.STATE      = value;
-                else if (key == "sampling")   V.SAMPLING   = value;
-                else if (key == "station")    V.STATION    = value;
-                else if (key == "stationart") V.STATIONART = value;
-                else if (key == "elapsed")    V.ELAPSED    = std::stoi(value);
-                else if (key == "start")      V.START      = std::stoi(value);
-                else if (key == "Time")       V.TIME       = std::stoi(value);
-
-                stateSet();
-            }
-        }
-    }
-}
-
 std::string samplingString() {
     if (V.SAMPLERATE == 0) return {};
     
@@ -161,7 +119,6 @@ void rendererStatus() {
         return;
     }
 
-    std::string kv;
     if (V.SNAPCAST) {              // V.TRACK_ONLY js: REFRESHDATA() > PLAYBACK.get()
         std::string ip    = fileContent(DIR.SHM +"snapserverip");
         S["snapserverip"] = ip;
@@ -169,21 +126,22 @@ void rendererStatus() {
         json2var(json);
     } else {
         if (V.AIRPLAY) {
-            V.EXT = "AirPlay";
-            std::string v;
-            for (const std::string& k : {"Album", "Artist", "coverart", "elapsed", "start", "state", "Time", "Title"}) {
-                v = fileContent(DIR.SHM +"airplay/"+ k);
-                if (!v.empty()) kv += k +'='+ v +'\n';
-            }
+            V.EXT      = "AirPlay";
             V.SAMPLING = "16 bit 44.1 kHz 1.41 Mbit/s";
+            for (const std::string& k : {"Album", "Artist", "coverart", "state", "Title"}) {
+                S[k] = fileContent(DIR.SHM +"airplay/"+ k);
+            }
+            for (const std::string& k : {"elapsed", "start", "Time"}) {
+                I[k] = std::stoi(fileContent(DIR.SHM +"airplay/"+ k));
+            }
         } else if (V.SPOTIFY) {
-            V.EXT = "Spotify";
-            kv         = fileContent(DIR.SHM +"spotify/status");
-            V.SAMPLING = "48 kHz 320 kbit/s";
+            V.EXT            = "Spotify";
+            V.SAMPLING       = "48 kHz 320 kbit/s";
+            std::string json = fileContent(DIR.SHM +"spotify");
+            json2var(json);
         }
         if (V.PLAY && V.ELAPSED) V.ELAPSED = epochS() - V.START + 1;
     }
-    if (!kv.empty()) kv2var(kv);
 }
 
 class MPDclient {
@@ -226,15 +184,14 @@ public:
             case MPD_STATE_PAUSE: V.STATE = "pause"; break;
             default:              V.STATE = "stop";  break;
         }
-        stateSet();
-        if (V.PLAY) V.TIMESTAMP = epochMs();
+        if (V.STATE == "play") V.TIMESTAMP = epochMs();
 
         V.ELAPSED   = mpd_status_get_elapsed_time(status);
         V.TIME      = mpd_status_get_total_time(status);
         V.POS       = mpd_status_get_song_pos(status);
         V.PL_LENGTH = mpd_status_get_queue_length(status);
 
-        if (!V.STOP) {
+        if (V.STATE != "stop") {
             const mpd_audio_format *audio = mpd_status_get_audio_format(status);
             if (audio->bits == MPD_SAMPLE_FORMAT_DSD) {
                 V.BITDEPTH   = 1;
@@ -375,6 +332,13 @@ int status() {
         rendererStatus();
         MPD.runStatus(); // get volume only
     }
+    
+    V.STOP  = false;
+    V.PLAY  = false;
+    V.PAUSE = false;
+         if (V.STATE == "stop") V.STOP  = true;
+    else if (V.STATE == "play") V.PLAY  = true;
+    else                        V.PAUSE = true;
 
     std::ifstream file(DIR.SYSTEM +"display.json");
     if (!file) {

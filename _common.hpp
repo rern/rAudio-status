@@ -251,12 +251,3 @@ void json2var(std::string& json) {
         }
     }
 }
-
-void stateSet() {
-    V.STOP  = false;
-    V.PLAY  = false;
-    V.PAUSE = false;
-         if (V.STATE == "stop") V.STOP  = true;
-    else if (V.STATE == "play") V.PLAY  = true;
-    else                        V.PAUSE = true;
-}

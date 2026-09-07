@@ -172,7 +172,6 @@ void parse_get_all_properties(DBusMessageIter* array_iter) {
         dbus_message_iter_next(&entry_iter);
     }
     if (V.ELAPSED == 0) V.STATE = "stop";
-    stateSet();
 }
 
 // =============================================================================
