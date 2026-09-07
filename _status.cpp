@@ -137,7 +137,7 @@ void rendererStatus() {
         } else if (V.SPOTIFY) {
             V.EXT            = "Spotify";
             V.SAMPLING       = "48 kHz 320 kbit/s";
-            std::string json = fileContent(DIR.SHM +"spotify");
+            std::string json = fileContent(DIR.SHM +"status.json");
             json2var(json);
         }
         if (V.PLAY && V.ELAPSED) V.ELAPSED = epochS() - V.START + 1;
