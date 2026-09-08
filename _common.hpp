@@ -78,7 +78,6 @@ struct Var {
         ICON,
         PLAYER,
         SAMPLING,
-        SNAPSERVER_IP,
         STATE,
         STATION,
         STATIONART,
@@ -212,7 +211,6 @@ void json2var(std::string& json) {
         while (i < n && (isspace(json[i]) || json[i] == ',')) i++;
         if (i >= n || json[i] == '}') break;
 
-        // key (always quoted)
         i++; // skip opening quote
         size_t keyStart = i;
         while (json[i] != '"') i++;
@@ -221,14 +219,13 @@ void json2var(std::string& json) {
 
         while (i < n && (isspace(json[i]) || json[i] == ':')) i++;
 
-        // value
         std::string value;
         bool isString = false;
-        if (json[i] == '"') { // Album, Artist, coverart, state, Title
+        if (json[i] == '"') { // Album,Artist,coverart,file,state,station,Title
             isString = true;
             i++;
             size_t valStart = i;
-            while (json[i] != '"') i++; // note: doesn't handle escaped \" — see caveat below
+            while (json[i] != '"') i++;
             value = json.substr(valStart, i - valStart);
             escapeQuotes(value);
             if (key == "coverart") {
@@ -237,7 +234,7 @@ void json2var(std::string& json) {
                 S[key] = value;
             }
             i++;
-        } else {
+        } else { // elapsed,play,pllength,Time,timestamp,webradio
             size_t valStart = i;
             while (i < n && json[i] != ',' && json[i] != '}' && !isspace(json[i])) i++;
             value = json.substr(valStart, i - valStart);

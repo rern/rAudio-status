@@ -111,7 +111,7 @@ void statusFormatString(const std::string& k, std::string v) {
         std::cout << kv << '\n';
     }
 }
-
+////////////////////////////////////////////////////////////////////////////////
 void rendererStatus() {
     V.TIMESTAMP = epochMs();
     if (V.BLUETOOTH) {
@@ -119,7 +119,7 @@ void rendererStatus() {
         return;
     }
 
-    if (V.SNAPCAST) {              // V.TRACK_ONLY js: REFRESHDATA() > PLAYBACK.get()
+    if (V.SNAPCAST) { // V.TRACK_ONLY js: REFRESHDATA() > PLAYBACK.get()
         std::string ip    = fileContent(DIR.SHM +"snapserverip");
         S["snapserverip"] = ip;
         std::string json  = wsSend(ip, "status"); // websocket server status -s
@@ -160,7 +160,7 @@ public:
     bool ok() {
         return conn && mpd_connection_get_error(conn) == MPD_ERROR_SUCCESS;
     }
-
+////////////////////////////////////////////////////////////////////////////////
     void runStatus() {
         mpd_status *status = mpd_run_status(conn);
         if (status == nullptr) return;
@@ -549,11 +549,6 @@ int status() {
             << ", \"display\" : " << display << '\n';
     }
     
-    if (!V.SNAPSERVER_IP.empty()) { // reply to snapclient
-        if (!V.COVERART.empty())   S["coverart"]   = "http://"+ V.SNAPSERVER_IP + V.COVERART;
-        if (!V.STATIONART.empty()) S["stationart"] = "http://"+ V.SNAPSERVER_IP + V.STATIONART;
-    }
-
     for (const auto& [k, v] : S) statusFormatString(k, v);
     for (const auto& [k, v] : I) statusFormat(k, std::to_string(v));
     for (const auto& [k, v] : B) statusFormat(k, v ? "true" : "false");
@@ -647,8 +642,7 @@ int main(int argc, char **argv) {
     if (ok_status == 1) return 1;
     
     if (ARGV1 == "-s") {
-        V.SNAPSERVER_IP = ipAddress();
-        std::cout << "{ \"snapserverip\": \"" << V.SNAPSERVER_IP << "\"" << V.TRACK << '}';
+        std::cout << "{ \"snapserverip\": \"" << ipAddress() << "\"" << V.TRACK << " }";
         return 0;
     }
     
