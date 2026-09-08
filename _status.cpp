@@ -77,16 +77,16 @@ void fileCover(const std::string& file) {
 }
 
 std::string samplingString() {
-    if (V.SAMPLERATE == 0) return {};
+    if (!V.SAMPLERATE) return {};
     
     std::string sampling;
     if (V.BITDEPTH == 1) { // dsd
         uint32_t base = (V.SAMPLERATE % 48000 == 0) ? 48000 : 44100;
         sampling      = std::format("DSD{} {:.3f} MHz", V.SAMPLERATE / base, V.SAMPLERATE / 1000000.0);
     } else {
-        if (V.BITDEPTH > 0)   sampling  = std::format("{} bit ", V.BITDEPTH);
-                              sampling += std::format("{:.1f} kHz", V.SAMPLERATE / 1000.0);
-        if (V.BITRATE > 0)    sampling += std::format(" {} kbit/s", V.BITRATE);
+        if (V.BITDEPTH) sampling  = std::format("{} bit ", V.BITDEPTH);
+                        sampling += std::format("{:.1f} kHz", V.SAMPLERATE / 1000.0);
+        if (V.BITRATE)  sampling += std::format(" {} kbit/s", V.BITRATE);
     }
     return sampling;
 }
@@ -203,7 +203,7 @@ public:
             }
         }
 
-        B["updating"]  = mpd_status_get_update_id(status) > 0;
+        B["updating"]  = mpd_status_get_update_id(status);
         B["consume"]   = mpd_status_get_consume(status);
         B["random"]    = mpd_status_get_random(status);
         B["repeat"]    = mpd_status_get_repeat(status);
@@ -252,7 +252,7 @@ public:
         
         V.URI_INI = V.URI.substr(0, 4);
         std::unordered_set<std::string> scheme = {"http", "rtmp", "rtp:", "rtsp"};
-        V.STREAM  = scheme.count(V.URI_INI) > 0;
+        V.STREAM  = scheme.count(V.URI_INI);
         
         std::string file = "/mnt/MPD/"+ V.URI;
         path             = file;
@@ -439,7 +439,7 @@ int status() {
                         std::string status = fileContent(DIR.SHM +"status.json");
                         json2var(status);
                     } else {
-                        std::string cmd = "systemctl start "+ std::string(V.EXT == "DAB" ? "dab" : "radio") +" &> /dev/null &";
+                        std::string cmd = "systemctl start "+ std::string((V.EXT == "DAB") ? "dab" : "radio") +" &> /dev/null &";
                         std::system(cmd.c_str());
                     }
                 } else if (!S["Title"].empty()) {
@@ -491,7 +491,7 @@ int status() {
     
     S["control"]  = V.CONTROL;
     S["coverart"] = V.COVERART;
-    S["icon"]     = V.ICON.empty() && V.PLAYER != "mpd" ? V.PLAYER : V.ICON;
+    S["icon"]     = (V.ICON.empty() && V.PLAYER != "mpd") ? V.PLAYER : V.ICON;
     S["file"]     = V.URI;
     S["player"]   = V.PLAYER;
     S["sampling"] = V.SAMPLING;
@@ -521,7 +521,7 @@ int status() {
     if (fs::exists(DIR.SYSTEM +"volumelimit")) {
         VECTOR = fileContentLines(DIR.SYSTEM +"volumelimit.conf");
         for (const std::string& l : VECTOR) {
-            if (l.find("max") == 0) {
+            if (l.starts_with("max")) {
                 volumemax   = std::stoi(l.substr(4));
                 volumelimit = volumemax < 100;
                 break;
@@ -617,7 +617,7 @@ int main(int argc, char **argv) {
             if (ARGV1 == "-W") {
                 msg = "ping";
             } else {
-                std::string type = ARGV1 == "-B" ? "Broadcast to all servers." : "Push to clients of this server.";
+                std::string type = (ARGV1 == "-B") ? "Broadcast to all servers." : "Push to clients of this server.";
                 msg = "{ \"channel\": \"notify\", \"data\": { \"icon\": \"raudio\", \"title\": \"WebSocket\", \"message\": \"status "+ ARGV1 +"\" } }";
             }
             std::cout << "status " << ARGV1 << " " << msg << "\n\n";
