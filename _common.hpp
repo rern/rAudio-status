@@ -234,15 +234,16 @@ void json2var(std::string& json) {
             else                        S[key]     = value;
             
             i++;
-        } else { // elapsed,pllength,Time,webradio
+        } else { // elapsed,pllength,Time,timestamp,webradio
             size_t valStart = i;
             while (i < n && json[i] != ',' && json[i] != '}' && !isspace(json[i])) i++;
             value = json.substr(valStart, i - valStart);
             
-                 if (key == "webradio") V.WEBRADIO = value == "true";
-            else if (key == "elapsed")  V.ELAPSED  = std::stoi(value);
-            else if (key == "Time")     V.TIME     = std::stoi(value);
-            else if (key == "pllength") I[key]     = std::stoi(value);
+                 if (key == "elapsed")   V.ELAPSED   = std::stoi(value);
+            else if (key == "pllength")  I[key]      = std::stoi(value);
+            else if (key == "Time")      V.TIME      = std::stoi(value);
+            else if (key == "timestamp") V.TIMESTAMP = std::stoll(value);
+            else if (key == "webradio")  V.WEBRADIO  = value == "true";
         }
     }
 }

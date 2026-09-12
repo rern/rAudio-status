@@ -250,10 +250,9 @@ public:
             }
         }
         
-        V.URI_INI = V.URI.substr(0, 4);
-        std::unordered_set<std::string> scheme = {"http", "rtmp", "rtp:", "rtsp"};
-        V.STREAM  = scheme.count(V.URI_INI);
-        
+        V.URI_INI        = V.URI.substr(0, 4);
+        V.STREAM         = V.URI_INI == "http" || V.URI_INI == "rtsp"
+                        || V.URI_INI == "rtmp" || V.URI_INI == "rtp:";
         std::string file = "/mnt/MPD/"+ V.URI;
         path             = file;
         V.EXT            = path.extension().string().erase(0, 1);
@@ -489,6 +488,11 @@ int status() {
         }
     }
     
+    if (V.PLAY && V.ELAPSED > 0 && V.TIMESTAMP > 0) {
+        V.ELAPSED += ( epochMs() - V.TIMESTAMP ) / 1000;
+        if (V.SPOTIFY) V.ELAPSED += 1;
+    }
+    
     S["control"]  = V.CONTROL;
     S["coverart"] = V.COVERART;
     S["icon"]     = (V.ICON.empty() && V.PLAYER != "mpd") ? V.PLAYER : V.ICON;
@@ -552,8 +556,12 @@ int status() {
     for (const auto& [k, v] : S) statusFormatString(k, v);
     for (const auto& [k, v] : I) statusFormat(k, std::to_string(v));
     for (const auto& [k, v] : B) statusFormat(k, v ? "true" : "false");
-
-    if (V.PLAY) statusFormat("timestamp", std::to_string(V.TIMESTAMP));
+    
+    if (V.PLAY) {
+        if (V.TIMESTAMP == 0) V.TIMESTAMP = epochMs();
+        statusFormat("timestamp", std::to_string(V.TIMESTAMP));
+    }
+    
     if (!V.TRACK_ONLY) std::cout << "}\n";
 ////////////////////////////////////////////////////////////////////////////////
     std::string file_play = DIR.SHM +"play";
