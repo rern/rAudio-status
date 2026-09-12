@@ -135,10 +135,10 @@ void rendererStatus() {
                 I[k] = std::stoi(fileContent(DIR.SHM +"airplay/"+ k));
             }
         } else if (V.SPOTIFY) {
-            V.EXT            = "Spotify";
-            V.SAMPLING       = "48 kHz 320 kbit/s";
-            std::string json = fileContent(DIR.SHM +"status.json");
-            json2var(json);
+            V.EXT              = "Spotify";
+            V.SAMPLING         = "48 kHz 320 kbit/s";
+            std::string status = fileContent(DIR.SHM +"status.json");
+            json2var(status);
         }
         if (V.PLAY && V.ELAPSED) V.ELAPSED = epochS() - V.START + 1;
     }

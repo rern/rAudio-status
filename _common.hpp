@@ -228,23 +228,21 @@ void json2var(std::string& json) {
             while (json[i] != '"') i++;
             value = json.substr(valStart, i - valStart);
             escapeQuotes(value);
-            if (key == "coverart") {
-                V.COVERART = value;
-            } else {
-                S[key] = value;
-            }
+            
+                 if (key == "coverart") V.COVERART = value;
+            else if (key == "state")    V.STATE    = value;
+            else                        S[key]     = value;
+            
             i++;
-        } else { // elapsed,play,pllength,Time,timestamp,webradio
+        } else { // elapsed,pllength,Time,webradio
             size_t valStart = i;
             while (i < n && json[i] != ',' && json[i] != '}' && !isspace(json[i])) i++;
             value = json.substr(valStart, i - valStart);
-            if (key == "pllength") {
-                I[key] = std::stoi(value);
-            } else if (key == "timestamp") {
-                V.TIMESTAMP = std::stoll(value);
-            } else {
-                B[key] = value == "true";
-            }
+            
+                 if (key == "webradio") V.WEBRADIO = value == "true";
+            else if (key == "elapsed")  V.ELAPSED  = std::stoi(value);
+            else if (key == "Time")     V.TIME     = std::stoi(value);
+            else if (key == "pllength") I[key]     = std::stoi(value);
         }
     }
 }
