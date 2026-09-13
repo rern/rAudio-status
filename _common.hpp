@@ -238,6 +238,7 @@ void json2var(std::string& json) {
             size_t valStart = i;
             while (i < n && json[i] != ',' && json[i] != '}' && !isspace(json[i])) i++;
             value = json.substr(valStart, i - valStart);
+            if (value == "null") value = "0";
             
                  if (key == "elapsed")   V.ELAPSED   = std::stoi(value);
             else if (key == "pllength")  I[key]      = std::stoi(value);
