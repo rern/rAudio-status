@@ -503,6 +503,7 @@ int status() {
 
     B["btsender"]     = V.BT_MIXER;
     B["librandom"]    = fs::exists(DIR.SYSTEM +"librandom");
+    B["lyrics"]       = fs::exists(DIR.SYSTEM +"lyrics");
     B["relays"]       = fs::exists(DIR.SYSTEM +"relays");
     B["relayson"]     = fs::exists(DIR.SHM +"relayson");
     B["scrobble"]     = fs::exists(DIR.SYSTEM +"scrobble");
