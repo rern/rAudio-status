@@ -134,9 +134,9 @@ void rendererStatus() {
                 value = fileContent(DIR.SHM +"airplay/"+ key);
                      if (key == "coverart")  V.COVERART  = value;
                 else if (key == "state")     V.STATE     = value;
-                else if (key == "elapsed")   V.ELAPSED   = std::stoi(value);
-                else if (key == "Time")      V.TIME      = std::stoi(value);
-                else if (key == "start")     start       = std::stoi(value);
+                else if (key == "elapsed")   V.ELAPSED   = value.empty() ? 0 : std::stoi(value);
+                else if (key == "Time")      V.TIME      = value.empty() ? 0 : std::stoi(value);
+                else if (key == "start")     start       = value.empty() ? 0 : std::stoi(value);
                 else                         S[key]      = value;
             }
             if (V.STATE == "play") V.ELAPSED += epochS() - start + 1;
