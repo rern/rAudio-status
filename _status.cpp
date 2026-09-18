@@ -130,16 +130,16 @@ void rendererStatus() {
             V.SAMPLING = "16 bit 44.1 kHz 1.41 Mbit/s";
             std::string value;
             int start = 0;
-            for (const std::string& key : {"Album", "Artist", "coverart", "state", "Title", "elapsed", "start", "Time"}) {
+            for (const std::string& key : {"Album", "Artist", "elapsed", "start", "state", "Time", "Title"}) {
                 value = fileContent(DIR.SHM +"airplay/"+ key);
-                     if (key == "coverart")  V.COVERART  = value;
-                else if (key == "state")     V.STATE     = value;
+                     if (key == "state")     V.STATE     = value;
                 else if (key == "elapsed")   V.ELAPSED   = value.empty() ? 0 : std::stoi(value);
                 else if (key == "Time")      V.TIME      = value.empty() ? 0 : std::stoi(value);
                 else if (key == "start")     start       = value.empty() ? 0 : std::stoi(value);
                 else                         S[key]      = value;
             }
             if (V.STATE == "play") V.ELAPSED += epochS() - start + 1;
+            V.COVERART  = "/data/shm/airplay/coverart";
         } else if (V.SPOTIFY) {
             V.EXT      = "Spotify";
             V.SAMPLING = "48 kHz 320 kbit/s";
