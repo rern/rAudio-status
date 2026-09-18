@@ -128,19 +128,13 @@ void rendererStatus() {
         if (V.AIRPLAY) {
             V.EXT      = "AirPlay";
             V.SAMPLING = "16 bit 44.1 kHz 1.41 Mbit/s";
-            for (const std::string& k : {"Album", "Artist", "coverart", "state", "Title"}) {
-                S[k] = fileContent(DIR.SHM +"airplay/"+ k);
-            }
-            for (const std::string& k : {"elapsed", "start", "Time"}) {
-                I[k] = std::stoi(fileContent(DIR.SHM +"airplay/"+ k));
-            }
         } else if (V.SPOTIFY) {
-            V.EXT              = "Spotify";
-            V.SAMPLING         = "48 kHz 320 kbit/s";
-            std::string status = fileContent(DIR.SHM +"status.json");
-            json2var(status);
+            V.EXT      = "Spotify";
+            V.SAMPLING = "48 kHz 320 kbit/s";
         }
-        if (V.PLAY && V.ELAPSED) V.ELAPSED = epochS() - V.START + 1;
+        std::string status = fileContent(DIR.SHM +"status.json");
+        json2var(status);
+        if (V.AIRPLAY && V.STATE == "play") V.ELAPSED += epochS() - I["start"] + 1;
     }
 }
 
