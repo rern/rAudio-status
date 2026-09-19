@@ -11,6 +11,7 @@
 #include "bluez_meta.hpp"
 #include "embedded_meta.hpp"
 #include "ip_hostname.hpp"
+#include "shairport_meta.hpp"
 #include "upnp_coverart.hpp"
 #include "websocket.hpp"
 

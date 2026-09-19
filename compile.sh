@@ -24,7 +24,7 @@ $( [[ ! $1 ]] && echo -O2 )
 $opt
 _status.cpp
 -o $file_bin
-$( pkg-config --cflags --libs alsa dbus-1 libcurl libmpdclient libupnpp taglib )
+$( pkg-config --cflags --libs alsa dbus-1 libcurl libmpdclient libsystemd libupnpp taglib )
 "
 echo 
 echo g++ $opt
