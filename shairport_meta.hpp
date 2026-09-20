@@ -100,15 +100,17 @@ void shairportMeta(sd_bus* bus) {
         return;
     }
     
+    int elapsed = 0;
     if ( state == "Paused" ) {
         V.STATE     = "pause";
+        elapsed     = std::stoi(fileContent(DIR.SHM +"timestamp")); // elapsed: pause_epoch - prev_epoch
     } else if ( state == "Playing" ) {
         V.STATE     = "play";
         V.TIMESTAMP = std::stoll(fileContent(DIR.SHM +"timestamp"));
     }
     
     progress  = get_prop(bus, "ProgressString"); // start/current/end
-    int64_t current, start, timestamp;
+    int64_t current, start;
     size_t p1 = progress.find('/');
     size_t p2 = progress.find('/', p1 + 1);
     start     = std::stoll(progress.substr(0, p1));
@@ -122,5 +124,5 @@ void shairportMeta(sd_bus* bus) {
         rate = std::stoll(format.substr(p1 + 1, p2 - p1 - 1));
     }
     
-    V.ELAPSED   = (current - start) / rate;
+    V.ELAPSED   = ((current - start) / rate) + elapsed;
 }
