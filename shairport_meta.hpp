@@ -2,13 +2,18 @@
 
 #include <systemd/sd-bus.h>
 
-std::string get_prop(sd_bus* bus, const char* iface, const char* prop) {
+std::string get_prop(sd_bus* bus, const char* prop) {
     sd_bus_message* m = nullptr;
     sd_bus_error error = SD_BUS_ERROR_NULL;
     char* val = nullptr;
 
-    int r = sd_bus_get_property_string(bus, "org.gnome.ShairportSync", 
-            "/org/gnome/ShairportSync", iface, prop, &error, &val);
+    int r = sd_bus_get_property_string(bus,
+                                       "org.gnome.ShairportSync",
+                                       "/org/gnome/ShairportSync",
+                                       "org.gnome.ShairportSync.RemoteControl",
+                                       prop,
+                                       &error,
+                                       &val);
     
     std::string result = (r >= 0) ? val : "Unknown";
     free(val);
@@ -18,9 +23,14 @@ std::string get_prop(sd_bus* bus, const char* iface, const char* prop) {
 void getMetadata(sd_bus* bus) {
     sd_bus_message* m = nullptr;
     sd_bus_error error = SD_BUS_ERROR_NULL;
-    int r = sd_bus_get_property(bus, "org.gnome.ShairportSync", 
-            "/org/mpris/MediaPlayer2", "org.mpris.MediaPlayer2.Player", 
-            "Metadata", &error, &m, "a{sv}");
+    int r = sd_bus_get_property(bus,
+                                "org.gnome.ShairportSync",
+                                "/org/mpris/MediaPlayer2",
+                                "org.mpris.MediaPlayer2.Player",
+                                "Metadata",
+                                &error,
+                                &m,
+                                "a{sv}");
     if (r < 0) return;
     
     sd_bus_message_enter_container(m, SD_BUS_TYPE_ARRAY, "{sv}");
@@ -78,15 +88,11 @@ void getMetadata(sd_bus* bus) {
     sd_bus_message_unref(m);
 }
 
-std::string getProperty(sd_bus* bus, const char* prop) {
-    return get_prop(bus, "org.gnome.ShairportSync.RemoteControl", prop);
-}
-
 void shairportMeta(sd_bus* bus) {
     getMetadata(bus);
     
     std::string progress, state;
-    state       = get_prop(bus, "org.gnome.ShairportSync.RemoteControl", "PlayerState");
+    state = get_prop(bus, "PlayerState");
     if ( state == "Not Available" ) {
         std::cerr << "Error: Not connected.\n";
         return;
@@ -94,19 +100,18 @@ void shairportMeta(sd_bus* bus) {
     
          if ( state == "Paused" )  V.STATE = "pause";
     else if ( state == "Playing" ) V.STATE = "play";
-    else if ( state == "Stopped" ) V.STATE = "stop";
     
-    progress    = get_prop(bus, "org.gnome.ShairportSync.RemoteControl", "ProgressString"); // start/current/end
+    progress    = get_prop(bus, "ProgressString"); // start/current/end
     int64_t start, current, timestamp;
     size_t pos1 = progress.find('/');
     size_t pos2 = progress.find('/', pos1 + 1);
     start       = std::stoll(progress.substr(0, pos1));
     current     = std::stoll(progress.substr(pos1 + 1, pos2 - pos1 - 1));
     
-    V.ELAPSED   = (current - start + 20500) / 41000;
+    V.ELAPSED   = (current - start) / 44100;
     if (V.STATE == "play") {
         timestamp  = std::stoll(fileContent(DIR.SHM +"timestamp"));
         V.ELAPSED += (epochMs() - timestamp) / 1000;
     }
-    if (V.ELAPSED >= V.TIME) V.ELAPSED = 0;
+    if (V.ELAPSED >= V.TIME) V.ELAPSED = V.TIME;
 }
