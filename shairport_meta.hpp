@@ -2,7 +2,9 @@
 
 #include <systemd/sd-bus.h>
 
-std::string get_prop(sd_bus* bus, const char* prop) {
+std::string get_prop(sd_bus* bus
+                    , const char* prop
+                    , const char* inf = "org.gnome.ShairportSync.RemoteControl") {
     sd_bus_message* m = nullptr;
     sd_bus_error error = SD_BUS_ERROR_NULL;
     char* val = nullptr;
@@ -10,7 +12,7 @@ std::string get_prop(sd_bus* bus, const char* prop) {
     int r = sd_bus_get_property_string(bus,
                                        "org.gnome.ShairportSync",
                                        "/org/gnome/ShairportSync",
-                                       "org.gnome.ShairportSync.RemoteControl",
+                                       inf,
                                        prop,
                                        &error,
                                        &val);
@@ -91,27 +93,34 @@ void getMetadata(sd_bus* bus) {
 void shairportMeta(sd_bus* bus) {
     getMetadata(bus);
     
-    std::string progress, state;
+    std::string format, progress, state;
     state = get_prop(bus, "PlayerState");
     if ( state == "Not Available" ) {
         std::cerr << "Error: Not connected.\n";
         return;
     }
     
-         if ( state == "Paused" )  V.STATE = "pause";
-    else if ( state == "Playing" ) V.STATE = "play";
-    
-    progress    = get_prop(bus, "ProgressString"); // start/current/end
-    int64_t start, current, timestamp;
-    size_t pos1 = progress.find('/');
-    size_t pos2 = progress.find('/', pos1 + 1);
-    start       = std::stoll(progress.substr(0, pos1));
-    current     = std::stoll(progress.substr(pos1 + 1, pos2 - pos1 - 1));
-    
-    V.ELAPSED   = (current - start) / 44100;
-    if (V.STATE == "play") {
-        timestamp  = std::stoll(fileContent(DIR.SHM +"timestamp"));
-        V.ELAPSED += (epochMs() - timestamp) / 1000;
+    if ( state == "Paused" ) {
+        V.STATE     = "pause";
+    } else if ( state == "Playing" ) {
+        V.STATE     = "play";
+        V.TIMESTAMP = std::stoll(fileContent(DIR.SHM +"timestamp"));
     }
-    if (V.ELAPSED >= V.TIME) V.ELAPSED = V.TIME;
+    
+    progress  = get_prop(bus, "ProgressString"); // start/current/end
+    int64_t current, start, timestamp;
+    size_t p1 = progress.find('/');
+    size_t p2 = progress.find('/', p1 + 1);
+    start     = std::stoll(progress.substr(0, p1));
+    current   = std::stoll(progress.substr(p1 + 1, p2 - p1 - 1));
+    
+    int rate  = 48000;
+    format    = get_prop(bus, "SourceFormat", "org.gnome.ShairportSync"); // AAC/48000/F24/2
+    if (!format.empty()) {
+        p1   = format.find('/');
+        p2   = format.find('/', p1 + 1);
+        rate = std::stoll(format.substr(p1 + 1, p2 - p1 - 1));
+    }
+    
+    V.ELAPSED   = (current - start) / rate;
 }

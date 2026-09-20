@@ -137,9 +137,9 @@ void rendererStatus() {
             V.SAMPLING = "48 kHz 320 kbit/s";
             std::string status = fileContent(DIR.SHM +"status.json");
             json2var(status);
-            V.ELAPSED += 1;
         }
-        if (V.STATE == "play" && V.ELAPSED && V.TIMESTAMP) V.ELAPSED += (epochMs() - V.TIMESTAMP) / 1000;
+        if (V.STATE == "play" && V.ELAPSED && V.TIMESTAMP) V.ELAPSED += (epochMs() - V.TIMESTAMP) / 1000 + 1;
+        if (V.ELAPSED >= V.TIME) V.ELAPSED = V.TIME;
     }
 }
 
