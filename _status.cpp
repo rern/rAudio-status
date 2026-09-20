@@ -139,7 +139,7 @@ void rendererStatus() {
             json2var(status);
         }
         if (V.STATE == "play" && V.ELAPSED && V.TIMESTAMP) V.ELAPSED += (epochMs() - V.TIMESTAMP) / 1000 + 1;
-        if (V.ELAPSED >= V.TIME) V.ELAPSED = V.TIME;
+        if (V.ELAPSED > V.TIME) V.ELAPSED = V.TIME;
     }
 }
 
