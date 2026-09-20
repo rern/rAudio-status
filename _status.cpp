@@ -58,7 +58,7 @@ void fileCover(const std::string& file) {
     if (!V.COVERART.empty() || is_dir) return;
     
     std::string file_embedded;
-    if (access(directory.c_str(), W_OK) == 0) {
+    if (access(directory.c_str(), W_OK) == 0) { // 0 for true
         file_embedded = directory +"/cover"; // extract to .../cover.jpg(png)
     } else { // fallback if not writeable
         file_embedded = fileEmbedded(file); // get already extracted
@@ -127,26 +127,19 @@ void rendererStatus() {
         json2var(json);
     } else {
         if (V.AIRPLAY) {
-            V.EXT      = "AirPlay";
-            V.SAMPLING = "16 bit 44.1 kHz 1.41 Mbit/s";
-            std::string value;
-            int start = 0;
-            for (const std::string& key : {"Album", "Artist", "elapsed", "start", "state", "Time", "Title"}) {
-                value = fileContent(DIR.SHM +"airplay/"+ key);
-                     if (key == "state")     V.STATE     = value;
-                else if (key == "elapsed")   V.ELAPSED   = value.empty() ? 0 : std::stoi(value);
-                else if (key == "Time")      V.TIME      = value.empty() ? 0 : std::stoi(value);
-                else if (key == "start")     start       = value.empty() ? 0 : std::stoi(value);
-                else                         S[key]      = value;
-            }
-            if (V.STATE == "play") V.ELAPSED += epochS() - start + 1;
-            V.COVERART  = "/data/shm/airplay/coverart";
+            V.EXT       = "AirPlay";
+            V.SAMPLING  = "16 bit 44.1 kHz 1.41 Mbit/s";
+            sd_bus* bus = nullptr;
+            sd_bus_default_system(&bus);
+            shairportMeta(bus);
         } else if (V.SPOTIFY) {
             V.EXT      = "Spotify";
             V.SAMPLING = "48 kHz 320 kbit/s";
             std::string status = fileContent(DIR.SHM +"status.json");
             json2var(status);
+            V.ELAPSED += 1;
         }
+        if (V.STATE == "play" && V.ELAPSED && V.TIMESTAMP) V.ELAPSED += (epochMs() - V.TIMESTAMP) / 1000;
     }
 }
 
@@ -494,11 +487,6 @@ int status() {
         }
     }
     
-    if (V.PLAY && V.ELAPSED > 0 && V.TIMESTAMP > 0) {
-        V.ELAPSED += ( epochMs() - V.TIMESTAMP ) / 1000;
-        if (V.SPOTIFY) V.ELAPSED += 1;
-    }
-    
     S["control"]  = V.CONTROL;
     S["coverart"] = V.COVERART;
     S["icon"]     = (V.ICON.empty() && V.PLAYER != "mpd") ? V.PLAYER : V.ICON;
@@ -565,7 +553,7 @@ int status() {
     for (const auto& [k, v] : B) statusFormat(k, v ? "true" : "false");
     
     if (V.PLAY) {
-        if (V.TIMESTAMP == 0) V.TIMESTAMP = epochMs();
+        if (!V.TIMESTAMP) V.TIMESTAMP = epochMs();
         statusFormat("timestamp", std::to_string(V.TIMESTAMP));
     }
     

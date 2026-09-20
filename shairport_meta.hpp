@@ -28,6 +28,7 @@ void getMetadata(sd_bus* bus) {
     while (sd_bus_message_enter_container(m, SD_BUS_TYPE_DICT_ENTRY, "sv") > 0) {
         sd_bus_message_read(m, "s", &key);
         std::string s_key(key);
+        
         if (s_key == "xesam:artist") {
             sd_bus_message_enter_container(m, SD_BUS_TYPE_VARIANT, "as");
             sd_bus_message_enter_container(m, SD_BUS_TYPE_ARRAY, "s");
@@ -36,23 +37,38 @@ void getMetadata(sd_bus* bus) {
             S["Artist"] = artist;
             sd_bus_message_exit_container(m); // array
             sd_bus_message_exit_container(m); // variant
+            
         } else if (s_key == "xesam:title") {
             const char* title;
             sd_bus_message_read(m, "v", "s", &title);
             S["Title"] = title;
+            
         } else if (s_key == "xesam:album") {
             const char* album;
             sd_bus_message_read(m, "v", "s", &album);
             S["Album"] = album;
+            
         } else if (s_key == "mpris:artUrl") {
             const char* arturl;
             sd_bus_message_read(m, "v", "s", &arturl);
-            V.COVERART = arturl;
-            V.COVERART.erase(0, 7);
+            std::string file = arturl;
+            if (!file.empty()) {
+                fs::path source = file.substr(7); 
+                fs::path target = DIR.SHM +"/coverart";
+                std::error_code ec;
+                fs::path source_current = fs::read_symlink(target, ec);
+                if (ec || source_current != source) { // ec - not exists
+                    fs::remove(target, ec);
+                    fs::create_symlink(source, target);
+                }
+                V.COVERART = "/data/shm/coverart";
+            }
+            
         } else if (s_key == "mpris:length") {
             int64_t time = 0;
             sd_bus_message_read(m, "v", "x", &time);
             V.TIME = (time + 500000) / 1000000;
+            
         } else {
             sd_bus_message_skip(m, "v");
         }
@@ -66,8 +82,11 @@ std::string getProperty(sd_bus* bus, const char* prop) {
     return get_prop(bus, "org.gnome.ShairportSync.RemoteControl", prop);
 }
 
-void read_current_state(sd_bus* bus) {
-    std::string state = getProperty(bus, "PlayerState");
+void shairportMeta(sd_bus* bus) {
+    getMetadata(bus);
+    
+    std::string progress, state;
+    state       = get_prop(bus, "org.gnome.ShairportSync.RemoteControl", "PlayerState");
     if ( state == "Not Available" ) {
         std::cerr << "Error: Not connected.\n";
         return;
@@ -77,18 +96,17 @@ void read_current_state(sd_bus* bus) {
     else if ( state == "Playing" ) V.STATE = "play";
     else if ( state == "Stopped" ) V.STATE = "stop";
     
-    int sampling       = 0;
-    std::string format = get_prop(bus, "org.gnome.ShairportSync", "OutputFormat");
-    size_t pos         = format.find('/');
-    if (pos != std::string::npos) sampling = stoi(format.substr(0, pos));
-        
-    std::string progress = getProperty(bus, "ProgressString");
-    long long start, current;
+    progress    = get_prop(bus, "org.gnome.ShairportSync.RemoteControl", "ProgressString"); // start/current/end
+    int64_t start, current, timestamp;
     size_t pos1 = progress.find('/');
     size_t pos2 = progress.find('/', pos1 + 1);
     start       = std::stoll(progress.substr(0, pos1));
     current     = std::stoll(progress.substr(pos1 + 1, pos2 - pos1 - 1));
-    V.ELAPSED   = (current - start + (sampling / 2)) / sampling;
     
-    getMetadata(bus);
+    V.ELAPSED   = (current - start + 20500) / 41000;
+    if (V.STATE == "play") {
+        timestamp  = std::stoll(fileContent(DIR.SHM +"timestamp"));
+        V.ELAPSED += (epochMs() - timestamp) / 1000;
+    }
+    if (V.ELAPSED >= V.TIME) V.ELAPSED = 0;
 }
