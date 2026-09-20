@@ -91,10 +91,7 @@ void getMetadata(sd_bus* bus) {
 }
 
 void shairportMeta(sd_bus* bus) {
-    getMetadata(bus);
-    
-    std::string format, progress, state;
-    state = get_prop(bus, "PlayerState");
+    std::string state = get_prop(bus, "PlayerState");
     if ( state == "Not Available" ) {
         std::cerr << "Error: Not connected.\n";
         return;
@@ -103,13 +100,13 @@ void shairportMeta(sd_bus* bus) {
     int elapsed = 0;
     if ( state == "Paused" ) {
         V.STATE     = "pause";
-        elapsed     = std::stoi(fileContent(DIR.SHM +"timestamp")); // elapsed: pause_epoch - prev_epoch
+        elapsed     = std::stoi(fileContent(DIR.SHM +"elapsed")); // s (epoch pause - progress)
     } else if ( state == "Playing" ) {
         V.STATE     = "play";
-        V.TIMESTAMP = std::stoll(fileContent(DIR.SHM +"timestamp"));
+        V.TIMESTAMP = std::stoll(fileContent(DIR.SHM +"timestamp")); // ms
     }
     
-    progress  = get_prop(bus, "ProgressString"); // start/current/end
+    std::string progress = get_prop(bus, "ProgressString"); // start/current/end
     int64_t current, start;
     size_t p1 = progress.find('/');
     size_t p2 = progress.find('/', p1 + 1);
@@ -117,7 +114,7 @@ void shairportMeta(sd_bus* bus) {
     current   = std::stoll(progress.substr(p1 + 1, p2 - p1 - 1));
     
     int rate  = 48000;
-    format    = get_prop(bus, "SourceFormat", "org.gnome.ShairportSync"); // AAC/48000/F24/2
+    std::string format = get_prop(bus, "SourceFormat", "org.gnome.ShairportSync"); // AAC/48000/F24/2
     if (!format.empty()) {
         p1   = format.find('/');
         p2   = format.find('/', p1 + 1);
@@ -125,4 +122,6 @@ void shairportMeta(sd_bus* bus) {
     }
     
     V.ELAPSED   = ((current - start) / rate) + elapsed;
+    
+    getMetadata(bus);
 }
