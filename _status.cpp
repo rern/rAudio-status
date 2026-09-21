@@ -132,7 +132,7 @@ void rendererStatus() {
             shairportMeta(bus);
         } else if (V.SPOTIFY) {
             V.EXT      = "Spotify";
-            V.SAMPLING = "48 kHz 320 kbit/s";
+            V.SAMPLING = "44.1 kHz 320 kbit/s";
             std::string status = fileContent(DIR.SHM +"status.json");
             json2var(status);
         }
