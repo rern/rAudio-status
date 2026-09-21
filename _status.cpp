@@ -127,8 +127,6 @@ void rendererStatus() {
         json2var(json);
     } else {
         if (V.AIRPLAY) {
-            V.EXT       = "AirPlay";
-            V.SAMPLING  = "16 bit 44.1 kHz 1.41 Mbit/s";
             sd_bus* bus = nullptr;
             sd_bus_default_system(&bus);
             shairportMeta(bus);
@@ -138,7 +136,7 @@ void rendererStatus() {
             std::string status = fileContent(DIR.SHM +"status.json");
             json2var(status);
         }
-        if (V.STATE == "play" && V.ELAPSED && V.TIMESTAMP) V.ELAPSED += (epochMs() - V.TIMESTAMP) / 1000 + 1;
+        if (V.STATE == "play" && V.TIMESTAMP) V.ELAPSED += (epochMs() - V.TIMESTAMP) / 1000 + 1;
         if (V.ELAPSED > V.TIME) V.ELAPSED = V.TIME;
     }
 }
@@ -464,7 +462,7 @@ int status() {
         }
     }
 
-    if (V.MPD && V.SAMPLING.empty()) V.SAMPLING = samplingString();
+    if (V.SAMPLING.empty()) V.SAMPLING = samplingString();
     if (V.SAMPLING.empty()) {
         V.SAMPLING  = V.EXT;
     } else {
