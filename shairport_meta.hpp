@@ -2,6 +2,17 @@
 
 #include <systemd/sd-bus.h>
 
+/*
+org.gnome.ShairportSync.RemoteControl:
+    - PlayerState    : Playing / Paused / Stopped
+    - ProgressString : start/current/end (@sample rate)
+    - SourceFormat   : AAC/48000/F24/2
+    
+org.mpris.MediaPlayer2.Player:
+    - Metadata       : xesam:album, xesam:artist, xesam:title, mpris:artUrl, mpris:length
+    - PlaybackStatus : Playing / Paused / Stopped
+    - Position       : elapsed in microsec (wait for fix)
+*/
 std::string get_prop(sd_bus* bus
                     , const char* prop
                     , const char* inf = "org.gnome.ShairportSync.RemoteControl") {
@@ -121,10 +132,10 @@ void shairportMeta(sd_bus* bus) {
     
     format   = get_prop(bus, "SourceFormat", "org.gnome.ShairportSync"); // AAC/48000/F24/2
     if (format.empty()) {
-        bool F24 = (end - start) / V.TIME > 45000;
+        bool _48khz  = (end - start) / V.TIME > 45000;
         V.EXT        = "AirPlay";
-        V.BITDEPTH   = F24 ? 24    : 16;
-        V.SAMPLERATE = F24 ? 48000 : 44100;
+        V.BITDEPTH   = _48khz ? 24    : 16;
+        V.SAMPLERATE = _48khz ? 48000 : 44100;
     } else {
         p0           = format.find('/');
         p1           = format.find('/', p0 + 1);
