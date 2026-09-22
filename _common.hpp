@@ -220,16 +220,20 @@ void json2var(std::string& json) {
 
         std::string value;
         bool isString = false;
+        bool escaped  = false;
         if (json[i] == '"') { // Album,Artist,coverart,file,state,station,Title
             isString = true;
             i++;
             size_t valStart = i;
             while (json[i] != '"') {
-                if (json[i] == '\\' && json[i + 1] == '"') i++;
+                if (json[i] == '\\' && json[i + 1] == '"') {
+                    i++;
+                    escaped = true;
+                }
                 i++;
             }
             value = json.substr(valStart, i - valStart);
-            value.erase(std::remove(value.begin(), value.end(), '\\'), value.end());
+            if (escaped) value.erase(std::remove(value.begin(), value.end(), '\\'), value.end());
             
                  if (key == "coverart") V.COVERART = value;
             else if (key == "state")    V.STATE    = value;
