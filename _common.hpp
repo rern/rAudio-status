@@ -224,9 +224,12 @@ void json2var(std::string& json) {
             isString = true;
             i++;
             size_t valStart = i;
-            while (json[i] != '"') i++;
+            while (json[i] != '"') {
+                if (json[i] == '\\' && json[i + 1] == '"') i++;
+                i++;
+            }
             value = json.substr(valStart, i - valStart);
-            escapeQuotes(value);
+            value.erase(std::remove(value.begin(), value.end(), '\\'), value.end());
             
                  if (key == "coverart") V.COVERART = value;
             else if (key == "state")    V.STATE    = value;
