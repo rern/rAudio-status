@@ -90,7 +90,7 @@ void getMetadata(sd_bus* bus) {
         } else if (s_key == "mpris:length") {
             int64_t time = 0;
             sd_bus_message_read(m, "v", "x", &time);
-            V.TIME = (time + 500000) / 1000000;
+            V.TIME = (time + 500000) / 1000000; // us > s
             
         } else {
             sd_bus_message_skip(m, "v");

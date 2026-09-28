@@ -8,7 +8,7 @@ constexpr int PORT_WS    = 8080;
 constexpr int TIMEOUT_MS = 1000;
 constexpr int UDP_PORT   = 9001;
 
-std::string wsSend(const std::string& ws_ip, std::string msg) {
+std::string wsSend(const std::string& ws_ip, std::string msg, int port = PORT_WS) {
     msg = (!msg.empty() && msg.front() == '{') ? msg : "\"" + msg + "\"";
 
     int sock = socket(AF_INET, SOCK_STREAM, 0);
@@ -17,7 +17,7 @@ std::string wsSend(const std::string& ws_ip, std::string msg) {
     struct sockaddr_in serverAddr;
     std::memset(&serverAddr, 0, sizeof(serverAddr));
     serverAddr.sin_family = AF_INET;
-    serverAddr.sin_port = htons(PORT_WS);
+    serverAddr.sin_port = htons(port);
     serverAddr.sin_addr.s_addr = inet_addr(ws_ip.c_str());
 
     if (connect(sock, (struct sockaddr*)&serverAddr, sizeof(serverAddr)) < 0) {

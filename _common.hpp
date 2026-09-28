@@ -7,12 +7,14 @@
 #include <cmath>
 #include <cstdint>
 #include <cstdlib>
+#include <cstdio>
 #include <cstring>
 #include <fstream>
 #include <filesystem>
 #include <iostream>
 #include <limits.h>
 #include <map>
+#include <optional>
 #include <poll.h>
 #include <string>
 #include <string_view>
@@ -91,6 +93,23 @@ std::unordered_map<std::string, std::string> S;
 std::unordered_map<std::string, int>         I;
 
 std::vector<std::string>                VECTOR;
+
+static int db2percent(double db) {
+    static constexpr double DB_MIN = -60.0;   // dB at 0%
+    static constexpr double DB_MAX =   0.0;   // dB at 100%
+    if (db <= DB_MIN) return 0.0;
+    if (db >= DB_MAX) return 100.0;
+
+    double pct;
+    if (DB_MAX - DB_MIN <= 24.0) {                      // narrow -> linear in dB
+        pct = (db - DB_MIN) / (DB_MAX - DB_MIN) * 100.0;
+    } else {
+        const double minNorm = std::pow(10.0, (DB_MIN - DB_MAX) / 60.0);
+        const double norm    = std::pow(10.0, (db     - DB_MAX) / 60.0);
+        pct = (norm - minNorm) / (1.0 - minNorm) * 100.0;
+    }
+    return std::clamp(static_cast<int>(pct + 0.5), 0, 100);
+}
 
 void escapeQuotes(std::string& v) {
     size_t extra = 0;
