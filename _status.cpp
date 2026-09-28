@@ -409,10 +409,10 @@ int status() {
             } else {
                 V.EXT      = "Radio";
                 dir_radio  = "webradio/";
-                if (V.URI.starts_with("https://icecast.radiofrance.fr") != std::string::npos) {
+                if (V.URI.starts_with("https://icecast.radiofrance.fr")) {
                     V.ICON = "radiofrance";
                     rp_rf  = true;
-                } else if (V.URI.starts_with("https://stream.radioparadise.com") != std::string::npos) {
+                } else if (V.URI.starts_with("https://stream.radioparadise.com")) {
                     V.ICON = "radioparadise";
                     rp_rf  = true;
                 } else {
