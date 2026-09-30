@@ -166,22 +166,17 @@ public:
             V.CONTROL = fileContent(DIR.SHM +"btmixer");
             V.VOLUME  = getVolume(V.CONTROL, "bluealsa");
         } else if (V.CAMILLADSP) {
-            if (V.VOLUME_NONE) {
-                std::string getvolume = wsSend("127.0.0.1", "GetVolume", 1234);
-                double v = 0.0;
-                size_t p = getvolume.find("\"value\":");
-                if (p != std::string::npos) {
-                    const char* begin = getvolume.c_str() + p + 8;
-                    char* end         = nullptr;
-                    double volume     = std::strtod(begin, &end);
-                    if (end != begin) {
-                        V.VOLUME      = db2percent(volume);
-                        V.VOLUME_NONE = false;
-                    }
+            std::string getvolume = wsSend("127.0.0.1", "GetVolume", 1234);
+            double v = 0.0;
+            size_t p = getvolume.find("\"value\":");
+            if (p != std::string::npos) {
+                const char* begin = getvolume.c_str() + p + 8;
+                char* end         = nullptr;
+                double volume     = std::strtod(begin, &end);
+                if (end != begin) {
+                    V.VOLUME      = db2percent(volume);
+                    V.VOLUME_NONE = false;
                 }
-            } else {
-                V.CONTROL = fileContent(DIR.SHM +"amixercontrol");
-                V.VOLUME  = V.CONTROL.empty() ? mpd_status_get_volume(status) : getVolume(V.CONTROL);
             }
         } else {
             V.VOLUME  = mpd_status_get_volume(status);
