@@ -166,16 +166,18 @@ public:
             V.CONTROL = fileContent(DIR.SHM +"btmixer");
             V.VOLUME  = getVolume(V.CONTROL, "bluealsa");
         } else if (V.CAMILLADSP) {
-            std::string getvolume = wsSend("127.0.0.1", "GetVolume", 1234);
-            double v = 0.0;
-            size_t p = getvolume.find("\"value\":");
-            if (p != std::string::npos) {
-                const char* begin = getvolume.c_str() + p + 8;
-                char* end         = nullptr;
-                double volume     = std::strtod(begin, &end);
-                if (end != begin) {
-                    V.VOLUME      = db2percent(volume);
-                    V.VOLUME_NONE = false;
+            if (!fs::exists(DIR.SYSTEM +"volumemute")) {
+                std::string getvolume = wsSend("127.0.0.1", "GetVolume", 1234);
+                double v = 0.0;
+                size_t p = getvolume.find("\"value\":");
+                if (p != std::string::npos) {
+                    const char* begin = getvolume.c_str() + p + 8;
+                    char* end         = nullptr;
+                    double volume     = std::strtod(begin, &end);
+                    if (end != begin) {
+                        V.VOLUME      = db2percent(volume);
+                        V.VOLUME_NONE = false;
+                    }
                 }
             }
         } else {
@@ -304,7 +306,6 @@ int status() {
     else if (V.PLAYER == "snapcast")  V.SNAPCAST  = true;
     else if (V.PLAYER == "spotify")   V.SPOTIFY   = true;
     else if (V.PLAYER == "upnp")      V.UPNP      = true;
-    V.CAMILLADSP = fs::exists(DIR.SYSTEM +"camilladsp");
 
     MPDclient MPD;
     if (!MPD.ok()) {
