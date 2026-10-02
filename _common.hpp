@@ -101,13 +101,9 @@ static int db2percent(double db) {
     if (db >= DB_MAX) return 100.0;
 
     double pct;
-    if (DB_MAX - DB_MIN <= 24.0) {                      // narrow -> linear in dB
-        pct = (db - DB_MIN) / (DB_MAX - DB_MIN) * 100.0;
-    } else {
-        const double minNorm = std::pow(10.0, (DB_MIN - DB_MAX) / 60.0);
-        const double norm    = std::pow(10.0, (db     - DB_MAX) / 60.0);
-        pct = (norm - minNorm) / (1.0 - minNorm) * 100.0;
-    }
+    const double minNorm = std::pow(10.0, (DB_MIN - DB_MAX) / 60.0);
+    const double norm    = std::pow(10.0, (db     - DB_MAX) / 60.0);
+    pct = (norm - minNorm) / (1.0 - minNorm) * 100.0;
     return std::clamp(static_cast<int>(pct + 0.5), 0, 100);
 }
 
