@@ -162,10 +162,7 @@ public:
         mpd_status *status = mpd_run_status(conn);
         if (status == nullptr) return;
 //..............................................................................
-        if (V.BT_MIXER && !fs::exists(DIR.SYSTEM +"devicewithbt")) {
-            V.CONTROL = fileContent(DIR.SHM +"btmixer");
-            V.VOLUME  = getVolume(V.CONTROL, "bluealsa");
-        } else if (V.CAMILLADSP) {
+        if (V.CAMILLADSP) {
             if (!fs::exists(DIR.SYSTEM +"volumemute")) {
                 std::string getvolume = wsSend("127.0.0.1", "GetVolume", 1234);
                 double v = 0.0;
@@ -180,6 +177,9 @@ public:
                     }
                 }
             }
+        } else if (V.BT_MIXER && !fs::exists(DIR.SYSTEM +"devicewithbt")) {
+            V.CONTROL = fileContent(DIR.SHM +"btmixer");
+            V.VOLUME  = getVolume(V.CONTROL, "bluealsa");
         } else {
             V.VOLUME  = mpd_status_get_volume(status);
         }
@@ -494,10 +494,13 @@ int status() {
         }
     }
     
+    
+    
     S["control"]  = V.CONTROL;
     S["coverart"] = V.COVERART;
     S["icon"]     = (V.ICON.empty() && V.PLAYER != "mpd") ? V.PLAYER : V.ICON;
     S["file"]     = V.URI;
+    S["fnvolume"] = fileContent(DIR.SHM +"fn_volume");
     S["player"]   = V.PLAYER;
     S["sampling"] = V.SAMPLING;
     S["state"]    = V.STATE;
