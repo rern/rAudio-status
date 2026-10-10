@@ -4,9 +4,9 @@
 #include <netinet/in.h>
 #include <sys/socket.h>
 
+constexpr int PORT_UDP   = 9001;
 constexpr int PORT_WS    = 8080;
 constexpr int TIMEOUT_MS = 1000;
-constexpr int UDP_PORT   = 9001;
 
 std::string wsSend(const std::string& ws_ip, std::string msg, int port = PORT_WS) {
     msg = (!msg.empty() && msg.front() == '{') ? msg : "\"" + msg + "\"";
@@ -21,14 +21,14 @@ std::string wsSend(const std::string& ws_ip, std::string msg, int port = PORT_WS
     serverAddr.sin_addr.s_addr = inet_addr(ws_ip.c_str());
 
     if (connect(sock, (struct sockaddr*)&serverAddr, sizeof(serverAddr)) < 0) {
-        std::cerr << "Error: Could not connect to WS server on port " << PORT_WS << "\n";
+        std::cerr << "Error: Could not connect to WS server on port " << port << "\n";
         close(sock);
         return {};
     }
 
     std::string handshake = 
         "GET / HTTP/1.1\r\n"
-        "Host: " + ws_ip + ":" + std::to_string(PORT_WS) + "\r\n"
+        "Host: " + ws_ip + ":" + std::to_string(port) + "\r\n"
         "Upgrade: websocket\r\n"
         "Connection: Upgrade\r\n"
         "Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n"
@@ -99,7 +99,7 @@ std::string wsSend(const std::string& ws_ip, std::string msg, int port = PORT_WS
             return ws_reply;
         }
     } else {
-        std::cerr << "Timed out waiting for reply from port " << PORT_WS << "\n";
+        std::cerr << "Timed out waiting for reply from port " << port << "\n";
     }
 
     close(sock);
@@ -158,11 +158,15 @@ int wsBroadcast(const std::string& msg) { // send datagram(udp) to all remote we
     struct sockaddr_in targetAddr;
     std::memset(&targetAddr, 0, sizeof(targetAddr));
     targetAddr.sin_family      = AF_INET;
-    targetAddr.sin_port        = htons(UDP_PORT);
+    targetAddr.sin_port        = htons(PORT_UDP);
     targetAddr.sin_addr.s_addr = inet_addr("255.255.255.255");
 
     ssize_t bytesSent          = sendto(sock, msg.c_str(), msg.length(), 0, (struct sockaddr*)&targetAddr, sizeof(targetAddr));
     
     close(sock);
     return 0;
+}
+
+std::string camillaWebsocket(const std::string& msg) {
+    return wsSend("127.0.0.1", msg, 1234);
 }

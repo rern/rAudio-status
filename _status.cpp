@@ -164,7 +164,7 @@ public:
 //..............................................................................
         if (V.CAMILLADSP) {
             if (!fs::exists(DIR.SYSTEM +"volumemute")) {
-                std::string getvolume = wsSend("127.0.0.1", "GetVolume", 1234);
+                std::string getvolume = camillaWebsocket("GetVolume");
                 double v = 0.0;
                 size_t p = getvolume.find("\"value\":");
                 if (p != std::string::npos) {
@@ -595,6 +595,15 @@ int main(int argc, char **argv) {
         return 0;
     }
 
+    if (ARGV1 == "-c") {
+        std::string msg   = argv[2];
+        std::string reply = camillaWebsocket(msg);
+        if (reply.empty()) return 1;
+
+        std::cout << reply << '\n';
+        return 0;
+    }
+    
     if (ARGV1 == "-C") {
         std::string file = argv[2];
         if (argc > 3) {
@@ -619,7 +628,7 @@ int main(int argc, char **argv) {
     }
     
     if (ARGV1 == "-Bp") {
-        std::cout << UDP_PORT << '\n';
+        std::cout << PORT_UDP << '\n';
         return 0;
     }
 
@@ -648,6 +657,11 @@ int main(int argc, char **argv) {
         std::cout << wsSend(ip, msg) << '\n';       // -W wait for response
         return 0;
     }
+    
+    if (ARGV1 == "-c") {
+        
+        return 0;
+    }
 
     V.TRACK_ONLY  = true; // status-push on track changed / ws on each client refresh
 
@@ -668,18 +682,19 @@ int main(int argc, char **argv) {
     std::cerr
         << "\nPlayback status of rAudio\n\n"
 
-        << "Usage: " << argv[0] << " [-o|-p|-b|-k]\n"
+        << "Usage: " << argv[0] << " [-p|-b|-s|-v]\n"
         << "  -p    websocket push      (normal push on change)\n"
         << "  -b    websocket broadcast (snapserver push on change)\n"
         << "  -s    snapserver status   (no counts and diaplay)\n"
         << "  -v    version\n\n"
 
-        << "Websocket: " << argv[0] << " [-P|-B|-W] [IP] [MESSAGE]\n"
+        << "Websocket: " << argv[0] << " [-P|-B|-W|-c] [IP] [MESSAGE]\n"
         << "        default IP      : 127.0.0.1\n"
         << "        default MESSAGE : (stdout)\n"
         << "  -P    push - exit immediately\n"
         << "  -B    broadcast\n"
-        << "  -W    send - wait for reply\n\n"
+        << "  -W    send - wait for reply\n"
+        << "  -c    CamillaDSP\n\n"
 
         << "Coverart: " << argv[0] << " -C SOURCE_FILE/DIR\n"
         << "        1. file     : {cover, album, folder, front} + ext: {jpg, png, gif}\n"
