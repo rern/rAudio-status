@@ -409,7 +409,7 @@ void bluezMeta() {
     DBusConnection* conn = dbus_bus_get(DBUS_BUS_SYSTEM, &err);
     check_error(&err);
 
-    std::ifstream file("/srv/http/data/shm/bluetoothdest");
+    std::ifstream file("/srv/http/data/shm/btsource");
     if (!file) {
         std::cerr << "Error: bluezMeta\n";
         return;
