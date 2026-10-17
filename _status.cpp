@@ -131,7 +131,6 @@ void rendererStatus() {
             sd_bus_default_system(&bus);
             shairportMeta(bus);
         } else if (V.SPOTIFY) {
-            V.EXT      = "Spotify";
             V.SAMPLING = "44.1 kHz 320 kbit/s";
             std::string status = fileContent(DIR.SHM +"status.json");
             json2var(status);
@@ -388,95 +387,94 @@ int status() {
             V.TIME      = std::stoi( data[2]);
             fileCover(dir);
         }
-    } else if (V.STREAM) {
-        if (V.UPNP) {
-            V.EXT      = "UPnP";
+    } else if (V.STREAM && !V.UPNP) {
+        V.WEBRADIO = true;
+        size_t p   = V.URI.find("#charset");
+        if (p != std::string::npos) V.URI.erase(p);
+        bool rp_rf      = false;
+        std::string dir_radio;
+        if (V.URI_INI == "rtsp") {
+            V.EXT      = "DAB";
+            V.ICON     = "dabradio";
+            dir_radio  = "dabradio/";
+            V.SAMPLING = "16 bit 48 kHz";
         } else {
-            V.WEBRADIO = true;
-            size_t p   = V.URI.find("#charset");
-            if (p != std::string::npos) V.URI.erase(p);
-            bool rp_rf      = false;
-            std::string dir_radio;
-            if (V.URI_INI == "rtsp") {
-                V.EXT      = "DAB";
-                V.ICON     = "dabradio";
-                dir_radio  = "dabradio/";
-                V.SAMPLING = "16 bit 48 kHz";
+            V.EXT      = "Radio";
+            dir_radio  = "webradio/";
+            if (V.URI.starts_with("https://icecast.radiofrance.fr")) {
+                V.ICON = "radiofrance";
+                rp_rf  = true;
+            } else if (V.URI.starts_with("https://stream.radioparadise.com")) {
+                V.ICON = "radioparadise";
+                rp_rf  = true;
             } else {
-                V.EXT      = "Radio";
-                dir_radio  = "webradio/";
-                if (V.URI.starts_with("https://icecast.radiofrance.fr")) {
-                    V.ICON = "radiofrance";
-                    rp_rf  = true;
-                } else if (V.URI.starts_with("https://stream.radioparadise.com")) {
-                    V.ICON = "radioparadise";
-                    rp_rf  = true;
+                V.ICON = "webradio";
+            }
+        }
+        
+        std::string dir;
+        std::string line;
+        std::ifstream file_radio(DIR.MPD +"radio");
+        while (std::getline(file_radio, line)) {
+            if (line.starts_with(V.URI +"^^")) {
+                dir = line.substr(line.find("^^") + 2);
+                break;
+            }
+        }
+        if (!dir.empty() && fs::exists(dir)) {
+            V.STATION = fs::path(dir).filename().string();
+            if (rp_rf && V.PLAY) V.EXT = V.STATION.substr(V.STATION.find(" - ") + 3);
+            if (V.PLAY) V.SAMPLING = samplingString();
+            if (V.SAMPLING.empty()) {
+                VECTOR = fileContentLines(dir +"/data");
+                if (VECTOR.size() > 1) V.SAMPLING = VECTOR[1];
+            }
+            if (V.COVER) fileCover(dir);
+            S["station"]    = V.STATION;
+            S["stationart"] = V.STATIONART;
+        }
+        
+        if (V.PLAY) {
+            if (rp_rf) { // radioparadise / radiofrance
+                if (fs::exists(DIR.SHM +"radio")) {
+                    std::string status = fileContent(DIR.SHM +"status.json");
+                    json2var(status);
                 } else {
-                    V.ICON = "webradio";
+                    std::string cmd = "systemctl start "+ std::string((V.EXT == "DAB") ? "dab" : "radio") +" &> /dev/null &";
+                    std::system(cmd.c_str());
+                }
+            } else if (!S["Title"].empty()) {
+                std::string title = S["Title"];
+                std::string split;
+                     if (title.find(" - ") != std::string::npos) split = " - ";
+                else if (title.find(": ")  != std::string::npos) split = ": ";
+                if (!split.empty()) {
+                    size_t p    = title.find(split);
+                    S["Artist"] = title.substr(0, p);
+                    title       = title.substr(p + split.length());
+                    size_t end  = title.find_last_not_of(' ');
+                    if (end != std::string::npos) title.erase(end + 1);
+                    S["Title"]  = title;
                 }
             }
-            
-            std::string dir;
-            std::string line;
-            std::ifstream file_radio(DIR.MPD +"radio");
-            while (std::getline(file_radio, line)) {
-                if (line.starts_with(V.URI +"^^")) {
-                    dir = line.substr(line.find("^^") + 2);
-                    break;
-                }
-            }
-            if (!dir.empty() && fs::exists(dir)) {
-                V.STATION = fs::path(dir).filename().string();
-                if (rp_rf && V.PLAY) V.EXT = V.STATION.substr(V.STATION.find(" - ") + 3);
-                if (V.PLAY) V.SAMPLING = samplingString();
-                if (V.SAMPLING.empty()) {
-                    VECTOR = fileContentLines(dir +"/data");
-                    if (VECTOR.size() > 1) V.SAMPLING = VECTOR[1];
-                }
-                if (V.COVER) fileCover(dir);
-                S["station"]    = V.STATION;
-                S["stationart"] = V.STATIONART;
-            }
-            
-            if (V.PLAY) {
-                if (rp_rf) { // radioparadise / radiofrance
-                    if (fs::exists(DIR.SHM +"radio")) {
-                        std::string status = fileContent(DIR.SHM +"status.json");
-                        json2var(status);
-                    } else {
-                        std::string cmd = "systemctl start "+ std::string((V.EXT == "DAB") ? "dab" : "radio") +" &> /dev/null &";
-                        std::system(cmd.c_str());
-                    }
-                } else if (!S["Title"].empty()) {
-                    std::string title = S["Title"];
-                    std::string split;
-                         if (title.find(" - ") != std::string::npos) split = " - ";
-                    else if (title.find(": ")  != std::string::npos) split = ": ";
-                    if (!split.empty()) {
-                        size_t p    = title.find(split);
-                        S["Artist"] = title.substr(0, p);
-                        title       = title.substr(p + split.length());
-                        size_t end  = title.find_last_not_of(' ');
-                        if (end != std::string::npos) title.erase(end + 1);
-                        S["Title"]  = title;
-                    }
-                }
-            } else { // force reset
-                V.ELAPSED   = 0;
-                V.PAUSE     = false;
-                V.STATE     = "stop";
-                V.STOP      = true;
-                S["Title"]  = "";
-            }
+        } else { // force reset
+            V.ELAPSED   = 0;
+            V.PAUSE     = false;
+            V.STATE     = "stop";
+            V.STOP      = true;
+            S["Title"]  = "";
         }
     }
 
     if (V.SAMPLING.empty()) V.SAMPLING = samplingString();
-    if (V.SAMPLING.empty()) {
-        V.SAMPLING  = V.EXT;
-    } else {
-        V.SAMPLING += " • "+ V.EXT;
+    if (!V.EXT.empty()) {
+        if (V.SAMPLING.empty()) {
+            V.SAMPLING  = V.EXT;
+        } else {
+            V.SAMPLING += " • "+ V.EXT;
+        }
     }
+    
     if (V.MPD && V.PL_LENGTH > 1) V.SAMPLING = std::format("{}/{} • {}", V.POS + 1, V.PL_LENGTH, V.SAMPLING);
     
     if (V.COVER &&
