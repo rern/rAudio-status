@@ -212,7 +212,7 @@ public:
             }
         }
 
-        B["updating"]  = mpd_status_get_update_id(status);
+        B["updating"]  = mpd_status_get_update_id(status) || fs::exists(DIR.MPD +"listing");
         B["consume"]   = mpd_status_get_consume(status);
         B["random"]    = mpd_status_get_random(status);
         B["repeat"]    = mpd_status_get_repeat(status);
